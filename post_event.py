@@ -135,16 +135,15 @@ def get_events():
             "url": event.url,
             'id': event.uid.split("@")[0].lower().replace('_', ''),
             "start": {
-                'dateTime': event.begin.format("YYYY-MM-DDTHH:mm:ss"), 
-                'timeZone': 'Europe/Oslo'
+                'dateTime': event.begin.format("YYYY-MM-DDTHH:mm:ssZ"), 
+                'timeZone': 'Universal'
                 },
             "end": {
-                'dateTime': event.end.format("YYYY-MM-DDTHH:mm:ss"), 
-                'timeZone': 'Europe/Oslo'
+                'dateTime': event.end.format("YYYY-MM-DDTHH:mm:ssZ"), 
+                'timeZone': 'Universal'
                 }
             })
 
-    # print(events)
     return events
 
 def get_old_events(service):
