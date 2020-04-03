@@ -14,17 +14,12 @@ def main():
     new_events = get_events()
     old_events = get_old_events(service)
 
-    manage_events(service, new_events, old_events)
-
-def manage_events(service, new_events, old_events):
-    service = service
-    new_events = new_events
-    old_events = old_events
-
     for event in new_events:
         exists = check_existance(service, event, old_events)
         post_event(service, event, exists)
 
+
+# Check if event from downloaded ics-file already exists online.
 def check_existance(service, new_event, old_events):
     service = service
     new_event = new_event
@@ -32,24 +27,10 @@ def check_existance(service, new_event, old_events):
 
     for event in old_events:
         if event["id"] == new_event["id"]:
-            print("Event exists")
             return True
-        # import pprint
-            # pp = pprint.PrettyPrinter(indent=3)
-            # pp.pprint(new_event)
-            # print()
-            # pp.pprint(event)
-            # print("\n\n")
-            #
-            # for id,val in enumerate(new_event): 
-            #     if val not in enumerate(event):
-            #         print("Event {} has changed".format(event["id"]))
-            #         return True
-            # print("Event {} has not changed".format(event["id"]))
-            # return None
 
-    print("New event")
     return False
+
 
 def setup():
     # If modifying these scopes, delete the file token.pickle.
@@ -77,6 +58,7 @@ def setup():
     return build('calendar', 'v3', credentials=creds)
 
 
+# Post event either by updating existing, or creating new event
 def post_event(service, event, exists):
     exists = exists
     e = event
@@ -108,8 +90,9 @@ def post_event(service, event, exists):
     print(event.get('id'))
 
 
+# Get .ics file from site, and make dictionary with relevant info for each event, and return list
+# Id is changed to fit limitations in google calendar id pattern.
 def get_events():
-    #Use https://icspy.readthedocs.io/en/stable/
 
     start_date = date.today()
     end_date = date.today().replace(month=(start_date.month + 4))
@@ -119,15 +102,11 @@ def get_events():
     response.encoding = 'utf-8'
     c = Calendar(response.text)
 
-    # f = open('~/Downloads/Events.ics', 'r').read()
-
     eventorEv = list(c.timeline)
     events = []
 
     for event in eventorEv:
         summary = event.name.split(", ")
-        # 2020-04-27 22:00:00+00:00
-        # 1996-12-19T16:39:57
         events.append({
             "name": ", ".join(summary[:-1]), 
             "club": summary[-1], 
@@ -146,13 +125,15 @@ def get_events():
 
     return events
 
+
+# Fetch list of all events from chosen Google calendar, and return list
 def get_old_events(service):
     service = service
 
     events = []
     page_token = None
     while True:
-        evs = (service.events().list(calendarId='primary', pageToken=page_token).execute())
+        evs = service.events().list(calendarId='primary', pageToken=page_token).execute()
         page_token = evs.get('nextPageToken')
         events.extend(evs["items"])
         if not page_token:
