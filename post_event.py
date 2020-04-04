@@ -27,10 +27,19 @@ def check_existance(service, new_event, old_events):
 
     for event in old_events:
         if event["id"] == new_event["id"]:
-            return True
+
+            try: 
+                for e in new_event:
+                    if new_event[e] != event[e]:
+                        print("Event has changed!")
+                        return True
+            except KeyError as e:
+                print("Tag does not exist:", e)
+
+            print("Event has not changed")
+            return None
 
     return False
-
 
 def setup():
     # If modifying these scopes, delete the file token.pickle.
@@ -69,14 +78,14 @@ def post_event(service, event, exists):
     # return
 
     event_body = {
-            'summary': '{} ({})'.format(e["name"], e["club"]),
+            'summary': e["summary"],
             'location': e["geo"],
             'id': e["id"],
             'source': {
-                'title': 'Eventor',
+                'title': 'Eventor-arrangement',
                 'url': e["url"]
                 },
-            'description': 'Se Eventor for mer informasjon',
+            'description': e["description"],
             'start': e["start"],
             'end': e["end"]
             }
@@ -101,6 +110,7 @@ def get_events():
     response = requests.get(url)
     response.encoding = 'utf-8'
     c = Calendar(response.text)
+    # c = Calendar(open("/Users/vegardlandsverk/Downloads/Events.ics").read())
 
     eventorEv = list(c.timeline)
     events = []
@@ -108,11 +118,11 @@ def get_events():
     for event in eventorEv:
         summary = event.name.split(", ")
         events.append({
-            "name": ", ".join(summary[:-1]), 
-            "club": summary[-1], 
+            'summary': '{} ({})'.format("".join(summary[:-1]), summary[-1]),
             "geo": event.location,
             "url": event.url,
             'id': event.uid.split("@")[0].lower().replace('_', ''),
+            'description': 'Se <a href={}>Eventor-arrangementet</a> for mer informasjon'.format(event.url),
             "start": {
                 'dateTime': event.begin.format("YYYY-MM-DDTHH:mm:ssZ"), 
                 'timeZone': 'Universal'
