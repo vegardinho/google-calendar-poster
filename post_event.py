@@ -99,14 +99,16 @@ def post_event(service, event, exists):
     print(event.get('id'))
 
 
-# Get .ics file from site, and make dictionary with relevant info for each event, and return list
+# Get .ics file from site (with events from now and three months forward), and make dictionary with relevant info for each event, and return list
 # Id is changed to fit limitations in google calendar id pattern.
 def get_events():
 
     start_date = date.today()
-    end_date = date.today().replace(month=(start_date.month + 4))
-    url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(
-            start_date, end_date)
+    NUM_MONTHS = 12
+    # Timedelta not entirely accurate, since one month is not exactly 4 weeks. Another date-handling
+    # package may be more suitable
+    end_date = date.today() + timedelta(weeks=(NUM_MONTHS * 4))
+    url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(start_date, end_date)
     response = requests.get(url)
     response.encoding = 'utf-8'
     c = Calendar(response.text)
