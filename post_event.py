@@ -1,5 +1,6 @@
 from __future__ import print_function
-from datetime import date,timedelta
+from datetime import date,timedelta,datetime
+from dateutil.relativedelta import relativedelta
 import pickle
 import os.path
 from googleapiclient.discovery import build
@@ -7,7 +8,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from ics import Calendar
 import requests
-import googleapiclient.errors
+from googleapiclient.errors import HttpError
+
+MONTHS_FWD = 12
+MONTHS_BACK = 2
 
 def main():
     service = setup()
@@ -16,29 +20,40 @@ def main():
 
     for event in new_events:
         exists = check_existance(service, event, old_events)
-        post_event(service, event, exists)
+        if exists != None:
+            post_event(service, event, exists)
 
+    for event in old_events:
+        try:
+            if "still_exists" not in event.keys() and event["source"]["title"] == "Eventor-arrangement":
+                print("deleting event:")
+                print(event)
+                service.events().delete(calendarId='primary', eventId=event["id"]).execute()
+        except:
+            continue
 
 # Check if event from downloaded ics-file already exists online.
 def check_existance(service, new_event, old_events):
     service = service
     new_event = new_event
-    old_events = old_events
 
     for event in old_events:
         if event["id"] == new_event["id"]:
+            event["still_exists"] = True
 
-            try: 
-                for e in new_event:
+            for e in new_event:
+                try:
                     if new_event[e] != event[e]:
                         print("Event has changed!")
                         return True
-            except KeyError as e:
-                print("Tag does not exist:", e)
+                except KeyError as e:
+                    print("Tag does not exist:", e)
 
             print("Event has not changed")
             return None
 
+    print("New event")
+    print(new_event)
     return False
 
 def setup():
@@ -72,28 +87,24 @@ def post_event(service, event, exists):
     exists = exists
     e = event
     service = service
-    # print(e["name"])
-    # print(e["start"])
-    # print(e["end"])
-    # return
 
     event_body = {
             'summary': e["summary"],
-            'location': e["geo"],
+            'location': e["location"],
             'id': e["id"],
-            'source': {
-                'title': 'Eventor-arrangement',
-                'url': e["url"]
-                },
+            'source': e["source"],
             'description': e["description"],
             'start': e["start"],
             'end': e["end"]
             }
 
-    if exists == True:
-        event = service.events().update(calendarId='primary', eventId=event_body["id"], body=event_body).execute()
-    elif exists == False:
-        event = service.events().insert(calendarId='primary', body=event_body).execute()
+    try:
+        if exists == True:
+            event = service.events().update(calendarId='primary', eventId=event_body["id"], body=event_body).execute()
+        elif exists == False:
+            event = service.events().insert(calendarId='primary', body=event_body).execute()
+    except HttpError as err:
+        print("ERROR:", err)
 
     print('Event created: %s' % (event.get('htmlLink')))
     print(event.get('id'))
@@ -103,11 +114,10 @@ def post_event(service, event, exists):
 # Id is changed to fit limitations in google calendar id pattern.
 def get_events():
 
-    start_date = date.today()
-    NUM_MONTHS = 12
     # Timedelta not entirely accurate, since one month is not exactly 4 weeks. Another date-handling
     # package may be more suitable
-    end_date = date.today() + timedelta(weeks=(NUM_MONTHS * 4))
+    start_date = date.today() - timedelta(weeks=(MONTHS_BACK * 4))
+    end_date = date.today() + timedelta(weeks=(MONTHS_FWD * 4))
     url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(start_date, end_date)
     response = requests.get(url)
     response.encoding = 'utf-8'
@@ -119,33 +129,64 @@ def get_events():
 
     for event in eventorEv:
         summary = event.name.split(", ")
-        events.append({
+
+        time = get_time_format(event.begin, event.end)
+
+        info = {
             'summary': '{} ({})'.format("".join(summary[:-1]), summary[-1]),
-            "geo": event.location,
-            "url": event.url,
+            "location": event.location,
+            "source": {
+                'title': 'Eventor-arrangement',
+                'url': event.url
+                },
             'id': event.uid.split("@")[0].lower().replace('_', ''),
             'description': 'Se <a href={}>Eventor-arrangementet</a> for mer informasjon'.format(event.url),
-            "start": {
-                'dateTime': event.begin.format("YYYY-MM-DDTHH:mm:ssZ"), 
-                'timeZone': 'Universal'
-                },
-            "end": {
-                'dateTime': event.end.format("YYYY-MM-DDTHH:mm:ssZ"), 
-                'timeZone': 'Universal'
-                }
-            })
+            "start": time[0],
+            "end": time[1]
+            }
+
+        events.append(info)
 
     return events
 
 
+def get_time_format(start_date, end_date):
+
+    s_date = start_date.to('Europe/Oslo')
+    e_date = end_date.to('Europe/Oslo')
+
+    if (s_date.timetuple().tm_hour == s_date.timetuple().tm_hour == 0):
+        start = {'date': s_date.format("YYYY-MM-DD")}
+        end = {'date': e_date.format("YYYY-MM-DD")}
+    else:
+        start = {
+            'dateTime': s_date.format("YYYY-MM-DDTHH:mm:ssZZ"), 
+            'timeZone': 'Etc/UTC'
+            }
+        end = {
+            'dateTime': e_date.format("YYYY-MM-DDTHH:mm:ssZZ"), 
+            'timeZone': 'Etc/UTC'
+            }
+    return [start, end]
+
+
 # Fetch list of all events from chosen Google calendar, and return list
 def get_old_events(service):
-    service = service
+    today = datetime.today()
+    start = today - relativedelta(months=MONTHS_BACK)
+    end = today + relativedelta(months=MONTHS_FWD)
+
+    tmax = end.isoformat('T') + "Z"
+    tmin = start.isoformat('T') + "Z"
+
+    print(tmax)
+    print(tmin)
 
     events = []
     page_token = None
     while True:
-        evs = service.events().list(calendarId='primary', pageToken=page_token).execute()
+        evs = service.events().list(calendarId='primary', pageToken=page_token, timeMin=tmin,
+                timeMax=tmax, showDeleted=False).execute()
         page_token = evs.get('nextPageToken')
         events.extend(evs["items"])
         if not page_token:
