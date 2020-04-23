@@ -106,6 +106,7 @@ def post_event(service, event, exists):
     except HttpError as err:
         print("ERROR:", err)
 
+    #TODO: in except: remove from trash
     print('Event created: %s' % (event.get('htmlLink')))
     print(event.get('id'))
 
@@ -114,10 +115,10 @@ def post_event(service, event, exists):
 # Id is changed to fit limitations in google calendar id pattern.
 def get_events():
 
-    # Timedelta not entirely accurate, since one month is not exactly 4 weeks. Another date-handling
-    # package may be more suitable
-    start_date = date.today() - timedelta(weeks=(MONTHS_BACK * 4))
-    end_date = date.today() + timedelta(weeks=(MONTHS_FWD * 4))
+    today = date.today()
+    start_date = today - relativedelta(months=MONTHS_BACK)
+    end_date = today + relativedelta(months=MONTHS_FWD)
+
     url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(start_date, end_date)
     response = requests.get(url)
     response.encoding = 'utf-8'
@@ -178,9 +179,6 @@ def get_old_events(service):
 
     tmax = end.isoformat('T') + "Z"
     tmin = start.isoformat('T') + "Z"
-
-    print(tmax)
-    print(tmin)
 
     events = []
     page_token = None
