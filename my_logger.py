@@ -4,10 +4,13 @@ from logging.handlers import TimedRotatingFileHandler
 
 class MyLogger:
 
-    FORMATTER = logging.Formatter("%(asctime)s %(filename)s %(funcName)s:%(lineno)d [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    FORMATTER = logging.Formatter("%(asctime)s %(filename)s %(funcName)s:%(lineno)d [%(levelname)s] %(message)s", 
+        datefmt="%Y-%m-%d %H:%M:%S")
 
+    # Creates a logger, adds handler for printing to screen, 
+    # plus optional written copy to file "all.log"
     def __init__(self, logger_name, create_file=False, 
-            logger_level="DEBUG", root="./"):
+            logger_level="DEBUG", root="./", f_ha="DEBUG", sys_ha="DEBUG"):
         self.ROOT = root
         self.logger_level = getattr(logging, logger_level)
 
@@ -15,10 +18,11 @@ class MyLogger:
         self.logger.setLevel(self.logger_level)
         self.logger.propagate = False
 
-        self.add_handler()
+        self.add_handler(level=sys_ha)
         if create_file:
-            self.add_handler(filename="all.log")
+            self.add_handler(level=f_ha, filename="all.log")
 
+    # Add handlers, for either writing to file or screen
     def add_handler(self, level="NOTSET", filename=None):
         if filename == None:
             handler = logging.StreamHandler(sys.stdout)
@@ -29,6 +33,7 @@ class MyLogger:
         self.logger.addHandler(handler)
         return 
 
+    # Set level on logger-level (may affect handler-level output)
     def set_logger_level(self, new_level):
         self.logger_level = getattr(logging, new_level)
         self.logger.setLevel(self.logger_level)
