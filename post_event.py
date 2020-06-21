@@ -13,8 +13,12 @@ from my_logger import MyLogger
 
 MONTHS_FWD = 12
 MONTHS_BACK = 2
+TODAY = datetime.today()
+START_DATE = TODAY - relativedelta(months=MONTHS_BACK)
+END_DATE = TODAY + relativedelta(months=MONTHS_FWD)
 
-log_obj = MyLogger("mlog", create_file=True, root="logs/", logger_level="DEBUG")
+log_obj = MyLogger("mlog", create_file=True, root="logs/", sys_ha="INFO", f_ha="DEBUG", 
+    logger_level="DEBUG")
 log_obj.add_handler(level="INFO", filename="info.log")
 log_obj.add_handler(level="WARNING", filename="err.log")
 mlog = log_obj.retrieve_logger()
@@ -23,16 +27,8 @@ def main():
     mlog.info("LOG START")
 
     service = setup()
-
-    today = datetime.today()
-    start = today - relativedelta(months=MONTHS_BACK)
-    end = today + relativedelta(months=MONTHS_FWD)
-
-    new_events = get_events(today, start, end)
-    uploaded_events = get_uploaded_events(service, today, start, end)
-
-    mlog.debug(uploaded_events)
-    mlog.debug(new_events)
+    new_events = get_events()
+    uploaded_events = get_uploaded_events(service)
     parse_events(service, new_events, uploaded_events)
 
     mlog.info("LOG END\n\n")
@@ -58,9 +54,11 @@ def post_event(service, event, action="upload"):
             post_event(service, event, "update")
 
 
+# Loop through all previously uploaded events for every new event, to see if it already exists; 
+# if so, update if changed. Delete all remaining events previously uploaded and not matched; 
+# upload all remaining new events not matched
 def parse_events(service, new_events, uploaded_events):
     mlog.info("Parsing events")
-
     ignore_events = []
     for new_event in new_events:
         for uploaded_event in uploaded_events:
@@ -96,6 +94,7 @@ def parse_events(service, new_events, uploaded_events):
     return
 
 
+# Setup communication channel with google calendar
 def setup():
     # If modifying these scopes, delete the file token.pickle.
     SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -121,19 +120,15 @@ def setup():
 
     return build('calendar', 'v3', credentials=creds, cache_discovery=False)
 
-# Get .ics file from site (with events from now and three months forward), and make dictionary with relevant info for each event, and return list
-# Id is changed to fit limitations in google calendar id pattern.
-def get_events(today, start, end):
-
-    today = today
-    start_date = start
-    end_date = end
-
-    url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(start_date, end_date)
+# Get .ics file from site (with events within specified dates), and make dictionary with
+# formatting matched to that of google events with relevant info for each event, and return 
+# list. ID is changed to fit limitations in google calendar id pattern.
+def get_events():
+    url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'\
+        .format(START_DATE, END_DATE)
     response = requests.get(url)
     response.encoding = 'utf-8'
     c = Calendar(response.text)
-    # c = Calendar(open("/Users/vegardlandsverk/Downloads/Events.ics").read())
 
     eventorEv = list(c.timeline)
     events = []
@@ -162,12 +157,15 @@ def get_events(today, start, end):
 
         events.append(info)
 
+    mlog.debug(events)
     return events
 
-def get_time_format(start_date, end_date):
+# Change time format to fit google event specifications. Change to date-format (as opposed
+# to datetime), if events start and end at midnight (00/24)
+def get_time_format(start, end):
 
-    s_date = start_date.to('Europe/Oslo')
-    e_date = end_date.to('Europe/Oslo')
+    s_date = start.to('Europe/Oslo')
+    e_date = end.to('Europe/Oslo')
 
     if (s_date.timetuple().tm_hour == s_date.timetuple().tm_hour == 0):
         start = {'date': s_date.format("YYYY-MM-DD")}
@@ -183,10 +181,10 @@ def get_time_format(start_date, end_date):
             }
     return [start, end]
 
-# Fetch list of all events from chosen Google calendar, and return list
-def get_uploaded_events(service, today, start, end):
-    tmax = end.isoformat('T') + "Z"
-    tmin = start.isoformat('T') + "Z"
+# Fetch list of all events from chosen Google calendar in specified time frame, and return list
+def get_uploaded_events(service):
+    tmax = END_DATE.isoformat('T') + "Z"
+    tmin = START_DATE.isoformat('T') + "Z"
 
     events = []
     page_token = None
@@ -197,6 +195,8 @@ def get_uploaded_events(service, today, start, end):
         events.extend(evs["items"])
         if not page_token:
             break
+
+    mlog.debug(events)
     return events
 
 main()
