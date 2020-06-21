@@ -17,7 +17,7 @@ TODAY = datetime.today()
 START_DATE = TODAY - relativedelta(months=MONTHS_BACK)
 END_DATE = TODAY + relativedelta(months=MONTHS_FWD)
 
-log_obj = MyLogger("mlog", create_file=True, root="logs/", sys_ha="INFO", f_ha="DEBUG", 
+log_obj = MyLogger("mlog", cre_f_ha=True, root="logs/", sys_ha="INFO", f_ha="DEBUG", 
     logger_level="DEBUG")
 log_obj.add_handler(level="INFO", filename="info.log")
 log_obj.add_handler(level="WARNING", filename="err.log")
@@ -67,7 +67,7 @@ def parse_events(service, new_events, uploaded_events):
                     new_event["start"]))
                 for e in new_event:
                     try:
-                        if new_event[e] != uploaded_event[e]:
+                        if new_event[e] != uploaded_event[e] or uploaded_event["status"] == "cancelled":
                             mlog.info("Event {} {} has changed!".format(new_event["summary"],
                                 new_event["start"]))
                             mlog.debug("New: {}".format(new_event[e]))
