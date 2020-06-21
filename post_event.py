@@ -9,52 +9,154 @@ from google.auth.transport.requests import Request
 from ics import Calendar
 import requests
 from googleapiclient.errors import HttpError
+from my_logger import MyLogger
 
 MONTHS_FWD = 12
 MONTHS_BACK = 2
 
+log_obj = MyLogger("mlog", True, full_log_level="INFO", full_file="./logs/full.log", 
+    err_file="./logs/err.log")
+mlog = log_obj.retrieve_logger()
+
 def main():
+    mlog.info("LOG START")
+
     service = setup()
-    new_events = get_events()
-    old_events = get_old_events(service)
 
-    for event in new_events:
-        exists = check_existance(service, event, old_events)
-        if exists != None:
-            post_event(service, event, exists)
+    today = datetime.today()
+    start = today - relativedelta(months=MONTHS_BACK)
+    end = today + relativedelta(months=MONTHS_FWD)
 
-    for event in old_events:
-        try:
-            if "still_exists" not in event.keys() and event["source"]["title"] == "Eventor-arrangement":
-                print("deleting event:")
-                print(event)
-                service.events().delete(calendarId='primary', eventId=event["id"]).execute()
-        except:
-            continue
+    new_events = get_events(today, start, end)
+    uploaded_events = get_uploaded_events(service, today, start, end)
+
+    # for ev in uploaded_events:
+    #     post_event(service, ev, "delete")
+    # exit()
+
+    mlog.debug(uploaded_events)
+    mlog.debug(new_events)
+    parse_events(service, new_events, uploaded_events)
+
+    # for event in new_events:
+    #     exists = check_existence(service, event, uploaded_events)
+    #     mlog.debug(uploaded_events[0])
+    #     exit()
+    #     if exists != None:
+    #         post_event(service, event, exists)
+
+    # for event in uploaded_events:
+    #     try:
+    #         if "still_exists" not in event.keys() and event["source"]["title"] == "Eventor-arrangement":
+    #             mlog.info("deleting event:")
+    #             mlog.info(event)
+    #             service.events().delete(calendarId='primary', eventId=event["id"]).execute()
+    #     except Exception as e:
+    #         mlog.error("%s" % e)
+
+    mlog.info("LOG END\n\n")
+
+def post_event(service, event, action="upload"):
+    mlog.info("Posting event {} ({}) with action: {}".format(event["summary"], event["start"], action))
+    try:
+        if action == "upload":
+            event = service.events().insert(calendarId='primary', body=event).execute()
+        elif action == "update":
+            event = service.events().update(calendarId='primary', eventId=event["id"], 
+                body=event).execute()
+        elif action == "delete":
+            service.events().delete(calendarId='primary', eventId=event["id"]).execute()
+        else:
+            mlog.error("Wrong parameter value [upload|update|delete]: %s" % action)
+    except HttpError as err:
+        mlog.error("%s" % err)
+
+def parse_events(service, new_events, uploaded_events):
+    mlog.info("Parsing events")
+
+    ignore_events = []
+    for new_event in new_events:
+        for uploaded_event in uploaded_events:
+            if new_event["id"] == uploaded_event["id"]:
+                for e in new_event:
+                    mlog.debug(new_event[e])
+                    mlog.debug(uploaded_event[e])
+                    try:
+                        if new_event[e] != uploaded_event[e]:
+                            mlog.info("Event {} {} has changed!".format(new_event["summary"],
+                                new_event["start"]))
+                            post_event(service, new_event, "update") 
+                            break
+                    except KeyError as e:
+                        mlog.warning("Tag does not exist: %s" % e)
+
+                ignore_events.append(uploaded_event)
+                ignore_events.append(new_event)
+                break
+
+    mlog.info("Deleting remaining previously uploaded events")
+    for rem_ev in uploaded_events:
+        if rem_ev not in ignore_events and rem_ev["status"] != "cancelled":
+            post_event(service, rem_ev, "delete")
+    mlog.info("Uploading remaining new events")
+    for rem_ev in new_events:
+        if rem_ev not in ignore_events:
+            post_event(service, rem_ev, "upload")
+    return
 
 # Check if event from downloaded ics-file already exists online.
-def check_existance(service, new_event, old_events):
+def check_existence(service, new_event, uploaded_events):
     service = service
     new_event = new_event
 
-    for event in old_events:
-        if event["id"] == new_event["id"]:
-            event["still_exists"] = True
+    for uploaded_event in uploaded_events:
+        if new_event["id"] == uploaded_event["id"]:
+            uploaded_event["still_exists"] = True
+            mlog.debug(uploaded_event)
 
             for e in new_event:
                 try:
-                    if new_event[e] != event[e]:
-                        print("Event has changed!")
+                    if new_event[e] != uploaded_event[e]:
+                        mlog.debug("Event has changed!")
                         return True
                 except KeyError as e:
-                    print("Tag does not exist:", e)
+                    mlog.warning("Tag does not exist: %s" % e)
+                    mlog.debug("New event: %s" % new_event)
 
-            print("Event has not changed")
             return None
 
-    print("New event")
-    print(new_event)
+    mlog.info("New event")
+    mlog.debug(new_event)
     return False
+
+# Post event either by updating existing, or creating new event
+def post_event_old(service, event, exists):
+    exists = exists
+    e = event
+    service = service
+
+    event_body = {
+            'summary': e["summary"],
+            'location': e["location"],
+            'id': e["id"],
+            'source': e["source"],
+            'description': e["description"],
+            'start': e["start"],
+            'end': e["end"]
+            }
+
+    try:
+        if exists == True:
+            event = service.events().update(calendarId='primary', eventId=event_body["id"], body=event_body).execute()
+        elif exists == False:
+            event = service.events().insert(calendarId='primary', body=event_body).execute()
+    except HttpError as err:
+        mlog.error("%s" % err)
+
+    #TODO: in except: remove from trash
+    mlog.debug('Event created: %s' % (event.get('htmlLink')))
+    mlog.debug(event.get('id'))
+
 
 def setup():
     # If modifying these scopes, delete the file token.pickle.
@@ -79,45 +181,16 @@ def setup():
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
 
-    return build('calendar', 'v3', credentials=creds)
-
-
-# Post event either by updating existing, or creating new event
-def post_event(service, event, exists):
-    exists = exists
-    e = event
-    service = service
-
-    event_body = {
-            'summary': e["summary"],
-            'location': e["location"],
-            'id': e["id"],
-            'source': e["source"],
-            'description': e["description"],
-            'start': e["start"],
-            'end': e["end"]
-            }
-
-    try:
-        if exists == True:
-            event = service.events().update(calendarId='primary', eventId=event_body["id"], body=event_body).execute()
-        elif exists == False:
-            event = service.events().insert(calendarId='primary', body=event_body).execute()
-    except HttpError as err:
-        print("ERROR:", err)
-
-    #TODO: in except: remove from trash
-    print('Event created: %s' % (event.get('htmlLink')))
-    print(event.get('id'))
+    return build('calendar', 'v3', credentials=creds, cache_discovery=False)
 
 
 # Get .ics file from site (with events from now and three months forward), and make dictionary with relevant info for each event, and return list
 # Id is changed to fit limitations in google calendar id pattern.
-def get_events():
+def get_events(today, start, end):
 
-    today = date.today()
-    start_date = today - relativedelta(months=MONTHS_BACK)
-    end_date = today + relativedelta(months=MONTHS_FWD)
+    today = today
+    start_date = start
+    end_date = end
 
     url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'.format(start_date, end_date)
     response = requests.get(url)
@@ -133,18 +206,22 @@ def get_events():
 
         time = get_time_format(event.begin, event.end)
 
-        info = {
-            'summary': '{} ({})'.format("".join(summary[:-1]), summary[-1]),
-            "location": event.location,
-            "source": {
-                'title': 'Eventor-arrangement',
-                'url': event.url
-                },
-            'id': event.uid.split("@")[0].lower().replace('_', ''),
-            'description': 'Se <a href={}>Eventor-arrangementet</a> for mer informasjon'.format(event.url),
-            "start": time[0],
-            "end": time[1]
-            }
+        try:
+            info = {
+                'summary': '{} ({})'.format("".join(summary[:-1]), summary[-1]),
+                "source": {
+                    'title': 'Eventor-arrangement',
+                    'url': event.url
+                    },
+                'id': event.uid.split("@")[0].lower().replace('_', ''),
+                'description': 'Se {} for mer informasjon'.format(event.url),
+                "start": time[0],
+                "end": time[1]
+                }
+            if event.geo:
+                info.update({"location": "{}, {}".format(event.geo[0], event.geo[1])})
+        except TypeError as e:
+            mlog.warning("%s" % e)
 
         events.append(info)
 
@@ -172,11 +249,7 @@ def get_time_format(start_date, end_date):
 
 
 # Fetch list of all events from chosen Google calendar, and return list
-def get_old_events(service):
-    today = datetime.today()
-    start = today - relativedelta(months=MONTHS_BACK)
-    end = today + relativedelta(months=MONTHS_FWD)
-
+def get_uploaded_events(service, today, start, end):
     tmax = end.isoformat('T') + "Z"
     tmin = start.isoformat('T') + "Z"
 
@@ -184,7 +257,7 @@ def get_old_events(service):
     page_token = None
     while True:
         evs = service.events().list(calendarId='primary', pageToken=page_token, timeMin=tmin,
-                timeMax=tmax, showDeleted=False).execute()
+                timeMax=tmax, showDeleted=True).execute()
         page_token = evs.get('nextPageToken')
         events.extend(evs["items"])
         if not page_token:
