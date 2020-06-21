@@ -14,8 +14,9 @@ from my_logger import MyLogger
 MONTHS_FWD = 12
 MONTHS_BACK = 2
 
-log_obj = MyLogger("mlog", True, full_log_level="INFO", full_file="./logs/full.log", 
-    err_file="./logs/err.log")
+log_obj = MyLogger("mlog", create_file=True, root="logs/", logger_level="DEBUG")
+log_obj.add_handler(level="INFO", filename="info.log")
+log_obj.add_handler(level="WARNING", filename="err.log")
 mlog = log_obj.retrieve_logger()
 
 def main():
@@ -30,31 +31,12 @@ def main():
     new_events = get_events(today, start, end)
     uploaded_events = get_uploaded_events(service, today, start, end)
 
-    # for ev in uploaded_events:
-    #     post_event(service, ev, "delete")
-    # exit()
-
     mlog.debug(uploaded_events)
     mlog.debug(new_events)
     parse_events(service, new_events, uploaded_events)
 
-    # for event in new_events:
-    #     exists = check_existence(service, event, uploaded_events)
-    #     mlog.debug(uploaded_events[0])
-    #     exit()
-    #     if exists != None:
-    #         post_event(service, event, exists)
-
-    # for event in uploaded_events:
-    #     try:
-    #         if "still_exists" not in event.keys() and event["source"]["title"] == "Eventor-arrangement":
-    #             mlog.info("deleting event:")
-    #             mlog.info(event)
-    #             service.events().delete(calendarId='primary', eventId=event["id"]).execute()
-    #     except Exception as e:
-    #         mlog.error("%s" % e)
-
     mlog.info("LOG END\n\n")
+
 
 def post_event(service, event, action="upload"):
     mlog.info("Posting event {} ({}) with action: {}".format(event["summary"], event["start"], action))
@@ -70,6 +52,11 @@ def post_event(service, event, action="upload"):
             mlog.error("Wrong parameter value [upload|update|delete]: %s" % action)
     except HttpError as err:
         mlog.error("%s" % err)
+        # Error code 409 implies existing event online
+        if err.resp.status == 409:
+            mlog.info("Attempting to repost by update")
+            post_event(service, event, "update")
+
 
 def parse_events(service, new_events, uploaded_events):
     mlog.info("Parsing events")
@@ -78,13 +65,15 @@ def parse_events(service, new_events, uploaded_events):
     for new_event in new_events:
         for uploaded_event in uploaded_events:
             if new_event["id"] == uploaded_event["id"]:
+                mlog.debug("Event \"{}\" ({}) found in previously uploaded events".format(new_event["summary"],
+                    new_event["start"]))
                 for e in new_event:
-                    mlog.debug(new_event[e])
-                    mlog.debug(uploaded_event[e])
                     try:
                         if new_event[e] != uploaded_event[e]:
                             mlog.info("Event {} {} has changed!".format(new_event["summary"],
                                 new_event["start"]))
+                            mlog.debug("New: {}".format(new_event[e]))
+                            mlog.debug("Prev. uploaded: {}".format(uploaded_event[e]))
                             post_event(service, new_event, "update") 
                             break
                     except KeyError as e:
@@ -95,6 +84,8 @@ def parse_events(service, new_events, uploaded_events):
                 break
 
     mlog.info("Deleting remaining previously uploaded events")
+    mlog.debug("Ignored events:")
+    mlog.debug(ignore_events)
     for rem_ev in uploaded_events:
         if rem_ev not in ignore_events and rem_ev["status"] != "cancelled":
             post_event(service, rem_ev, "delete")
@@ -103,59 +94,6 @@ def parse_events(service, new_events, uploaded_events):
         if rem_ev not in ignore_events:
             post_event(service, rem_ev, "upload")
     return
-
-# Check if event from downloaded ics-file already exists online.
-def check_existence(service, new_event, uploaded_events):
-    service = service
-    new_event = new_event
-
-    for uploaded_event in uploaded_events:
-        if new_event["id"] == uploaded_event["id"]:
-            uploaded_event["still_exists"] = True
-            mlog.debug(uploaded_event)
-
-            for e in new_event:
-                try:
-                    if new_event[e] != uploaded_event[e]:
-                        mlog.debug("Event has changed!")
-                        return True
-                except KeyError as e:
-                    mlog.warning("Tag does not exist: %s" % e)
-                    mlog.debug("New event: %s" % new_event)
-
-            return None
-
-    mlog.info("New event")
-    mlog.debug(new_event)
-    return False
-
-# Post event either by updating existing, or creating new event
-def post_event_old(service, event, exists):
-    exists = exists
-    e = event
-    service = service
-
-    event_body = {
-            'summary': e["summary"],
-            'location': e["location"],
-            'id': e["id"],
-            'source': e["source"],
-            'description': e["description"],
-            'start': e["start"],
-            'end': e["end"]
-            }
-
-    try:
-        if exists == True:
-            event = service.events().update(calendarId='primary', eventId=event_body["id"], body=event_body).execute()
-        elif exists == False:
-            event = service.events().insert(calendarId='primary', body=event_body).execute()
-    except HttpError as err:
-        mlog.error("%s" % err)
-
-    #TODO: in except: remove from trash
-    mlog.debug('Event created: %s' % (event.get('htmlLink')))
-    mlog.debug(event.get('id'))
 
 
 def setup():
@@ -182,7 +120,6 @@ def setup():
             pickle.dump(creds, token)
 
     return build('calendar', 'v3', credentials=creds, cache_discovery=False)
-
 
 # Get .ics file from site (with events from now and three months forward), and make dictionary with relevant info for each event, and return list
 # Id is changed to fit limitations in google calendar id pattern.
@@ -227,7 +164,6 @@ def get_events(today, start, end):
 
     return events
 
-
 def get_time_format(start_date, end_date):
 
     s_date = start_date.to('Europe/Oslo')
@@ -246,7 +182,6 @@ def get_time_format(start_date, end_date):
             'timeZone': 'Etc/UTC'
             }
     return [start, end]
-
 
 # Fetch list of all events from chosen Google calendar, and return list
 def get_uploaded_events(service, today, start, end):
