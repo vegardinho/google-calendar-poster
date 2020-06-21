@@ -9,7 +9,7 @@ class MyLogger:
 
     # Creates a logger, adds handler for printing to screen, 
     # plus optional written copy to file "all.log"
-    def __init__(self, logger_name, create_file=False, 
+    def __init__(self, logger_name, cre_f_ha=False, cre_sys_h=True, 
             logger_level="DEBUG", root="./", f_ha="DEBUG", sys_ha="DEBUG"):
         self.ROOT = root
         self.logger_level = getattr(logging, logger_level)
@@ -18,8 +18,9 @@ class MyLogger:
         self.logger.setLevel(self.logger_level)
         self.logger.propagate = False
 
-        self.add_handler(level=sys_ha)
-        if create_file:
+        if cre_sys_h:
+            self.add_handler(level=sys_ha) 
+        if cre_f_ha:
             self.add_handler(level=f_ha, filename="all.log")
 
     # Add handlers, for either writing to file or screen
