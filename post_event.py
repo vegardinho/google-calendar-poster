@@ -140,6 +140,7 @@ def get_events_ics():
     return ics_evs
 
 
+# Returns ElementTree object of all event-rows in xml document
 def get_events_xml():
     mlog.info("Downloading XML-events")
 
@@ -158,6 +159,7 @@ def get_events_xml():
 
     return xml_evs
 
+# Gets ics- and xml-information for chosen dates, extracts relevant information, and returns list of pakcets in appropriate format
 def get_events():
     START_IND = 0
     END_IND = 1
@@ -198,6 +200,7 @@ def get_events():
     mlog.debug(events)
     return events
 
+# Returns upload-ready dictionary with information in appropriate format.
 def make_packet(summary, e_url, e_id, time, e_geo, e_info):
     try:
         info = {
@@ -220,6 +223,7 @@ def make_packet(summary, e_url, e_id, time, e_geo, e_info):
 
     return info
 
+# Parses xml-sub-tree for event and returns contained information in list. Converts time to array-format
 def xml_ev_info(xml_ev, START_IND, END_IND):
     tree = xml_ev
     info = []
