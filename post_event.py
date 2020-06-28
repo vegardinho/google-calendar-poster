@@ -20,8 +20,16 @@ START_DATE = TODAY - relativedelta(months=MONTHS_BACK)
 END_DATE = TODAY + relativedelta(months=MONTHS_FWD)
 NM_SPS = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
 
+START_IN = 0
+END_IN = 1
+NAME_IN = 2
+CLUB_IN = 3
+DISTRICT_IN = 4
+DISTANCE_IN = 7
+INFO_IN = 11
+
 log_obj = MyLogger("mlog", cre_f_ha=True, cre_sys_h=True, root="logs/", sys_ha="INFO", f_ha="DEBUG", 
-    logger_level="DEBUG", o_write_all=True)
+    logger_level="DEBUG", o_write_all=False)
 log_obj.add_handler(level="INFO", filename="info.log")
 log_obj.add_handler(level="WARNING", filename="err.log")
 mlog = log_obj.retrieve_logger()
@@ -124,6 +132,42 @@ def setup():
 
     return build('calendar', 'v3', credentials=creds, cache_discovery=False)
 
+
+
+# Gets ics- and xml-information for chosen dates, extracts relevant information, and returns list of pakcets in appropriate format
+def get_events():
+ 
+    ics_evs = get_events_ics()
+    xml_evs = get_events_xml()
+
+    if (len(xml_evs) != len(ics_evs)):
+        mlog.critical("XML and ICS do not coincide. Aborting.")
+        exit()
+
+    mlog.info("Making event structs")
+    events = []
+
+    for i in range(len(xml_evs)):
+        ics_ev = ics_evs[i]
+        xml_ev = xml_evs[i]
+        xml_info = xml_ev_info(xml_ev, START_IN, END_IN)
+
+        # if skip_event(xml_info, ics_ev):
+        info = xml_info[INFO_IN]
+        if (info and ("avlys" in info.lower())) or ("avlys" in xml_info[NAME_IN].lower()):
+            continue
+
+        name_list = ics_ev.name.split(", ")
+        summary = '{} ({})'.format("".join(name_list[:-1]), name_list[-1])
+        e_id = ics_ev.uid.split("@")[0].lower().replace('_', '')
+        time = get_time_format(xml_info[START_IN], xml_info[END_IN])
+
+        e_pkt = make_packet(summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IN])
+        events.append(e_pkt)
+
+    mlog.debug(events)
+    return events
+
 # Get .ics file from site (with events within specified dates), and make dictionary with
 # formatting matched to that of google events with relevant info for each event, and return 
 # list. ID is changed to fit limitations in google calendar id pattern.
@@ -159,46 +203,18 @@ def get_events_xml():
 
     return xml_evs
 
-# Gets ics- and xml-information for chosen dates, extracts relevant information, and returns list of pakcets in appropriate format
-def get_events():
-    START_IND = 0
-    END_IND = 1
-    NAME_IN = 2
-    CLUB_IN = 3
-    DISTRICT_IN = 4
-    DISTANCE_IN = 7
-    INFO_IN = 11
+#Skip events that are cancelled
+def skip_event(xml, ics):
+    info = xml[INFO_IN]
+    start = xml[STARTN_IN]
+    maps = ics.geo
+    dst_to_now = relativedelta(xml[START_IN], datetime.now())
 
-    xml_evs = get_events_xml()
-    ics_evs = get_events_ics()
+    if (info and ("avlys" in info.lower()) or "avlys" in xml_info[NAME_IN].lower()):
+        return True
+    # if maps == None and  
 
-    if (len(xml_evs) != len(ics_evs)):
-        mlog.critical("XML and ICS do not coincide. Aborting.")
-        exit()
 
-    mlog.info("Making event structs")
-    events = []
-
-    for i in range(len(xml_evs)):
-        ics_ev = ics_evs[i]
-        xml_ev = xml_evs[i]
-
-        #Skip events that are cancelled
-        xml_info = xml_ev_info(xml_ev, START_IND, END_IND)
-        info = xml_info[INFO_IN]
-        if (info and ("avlys" in info.lower()) or "avlys" in xml_info[NAME_IN].lower()):
-            continue
-
-        name_list = ics_ev.name.split(", ")
-        summary = '{} ({})'.format("".join(name_list[:-1]), name_list[-1])
-        e_id = ics_ev.uid.split("@")[0].lower().replace('_', '')
-        time = get_time_format(xml_info[START_IND], xml_info[END_IND])
-
-        e_pkt = make_packet(summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IN])
-        events.append(e_pkt)
-
-    mlog.debug(events)
-    return events
 
 # Returns upload-ready dictionary with information in appropriate format.
 def make_packet(summary, e_url, e_id, time, e_geo, e_info):
@@ -224,24 +240,25 @@ def make_packet(summary, e_url, e_id, time, e_geo, e_info):
     return info
 
 # Parses xml-sub-tree for event and returns contained information in list. Converts time to array-format
-def xml_ev_info(xml_ev, START_IND, END_IND):
+def xml_ev_info(xml_ev, START_IN, END_IN):
     tree = xml_ev
     info = []
 
     for node in tree:
         info.append(node.findtext("./ss:Data", namespaces=NM_SPS))
 
-    info[START_IND] = arrow.get(info[START_IND])
-    if info[END_IND] == None:
-        if info[START_IND].timetuple().tm_hour == 0:
+    info[START_IN] = arrow.get(info[START_IN])
+    # info[START_IN] = datetime.fromisoformat(info[START_IN])
+    if info[END_IN] == None:
+        if info[START_IN].timetuple().tm_hour == 0:
             add_delta = relativedelta(days=1)
         else:
             add_delta = relativedelta(hours=4)
-        info[END_IND] = info[START_IND] + add_delta
+        info[END_IN] = info[START_IN] + add_delta
     else:
-        info[END_IND] = arrow.get(info[END_IND])
-    info[END_IND] = info[END_IND].replace(tzinfo='Europe/Oslo')
-    info[START_IND] = info[START_IND].replace(tzinfo='Europe/Oslo')
+        info[END_IN] = arrow.get(info[END_IN])
+    info[END_IN] = info[END_IN].replace(tzinfo='Europe/Oslo')
+    info[START_IN] = info[START_IN].replace(tzinfo='Europe/Oslo')
     return info
 
 # Change time format to fit google event specifications. Change to date-format (as opposed
