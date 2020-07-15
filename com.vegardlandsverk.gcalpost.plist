@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+ <plist version="1.0">
+
+  <!-- Run gcal script every night at 04.00, and retry every 600 seconds if failed -->
+ <dict>
+   <key>Label</key>
+   <string>com.vegardlandsverk.gcalpost</string>
+
+    <key>ProgramArguments</key>
+   <array>
+ 	  <string>/Users/vegardlandsverk/Documents/Progging/google_calendar/run_post_script.sh</string>
+   </array>
+
+    <key>KeepAlive</key>
+   <dict>
+ 	  <key>SuccessfulExit</key>
+ 	  <false/>
+   </dict>
+
+    <key>ThrottleInterval</key>
+   <integer>600</integer>
+
+    <key>StartCalendarInterval</key>
+   <dict>
+ 	  <key>Hour</key>
+ 	  <integer>04</integer>
+ 	  <key>Minute</key>
+ 	  <integer>00</integer>
+   </dict>
+
+    <key>StandardErrorPath</key>
+   <string>/Users/vegardlandsverk/Documents/Progging/google_calendar/logs/launchd_logs/launchd.err</string>
+
+    <key>StandardOutPath</key>
+   <string>/Users/vegardlandsverk/Documents/Progging/google_calendar/logs/launchd_logs/launchd.out</string>
+ </dict>
+ </plist>
