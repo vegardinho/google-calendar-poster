@@ -1,6 +1,5 @@
 from __future__ import print_function
 import xml.etree.ElementTree as ET
-from dateutil.relativedelta import relativedelta
 import pickle
 import os.path
 from googleapiclient.discovery import build
