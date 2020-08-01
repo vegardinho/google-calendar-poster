@@ -16,8 +16,8 @@ import atexit
 MONTHS_FWD = 12
 MONTHS_BACK = 2
 TODAY = arrow.now()
-START_DATE = TODAY - relativedelta(months=MONTHS_BACK)
-END_DATE = TODAY + relativedelta(months=MONTHS_FWD)
+START_DATE = TODAY.shift(months=+MONTHS_BACK)
+END_DATE = TODAY.shift(months=+MONTHS_FWD)
 
 NM_SPS = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
 
@@ -264,10 +264,10 @@ def xml_ev_info(xml_ev):
 	info[START_IN] = arrow.get(info[START_IN], tzinfo=TIMEZONE)
 	if info[END_IN] == None:
 		if info[START_IN].timetuple().tm_hour == 0:
-			add_delta = relativedelta(days=1)
+                        days_hrs = [1,0]
 		else:
-			add_delta = relativedelta(hours=4)
-		info[END_IN] = info[START_IN] + add_delta
+                        days_hrs = [0,4]
+		info[END_IN] = info[START_IN].shift(days=days_hrs[0], hours=days_hrs[1])
 	else:
 		info[END_IN] = arrow.get(info[END_IN], tzinfo=TIMEZONE)
 	return info
