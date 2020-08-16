@@ -16,7 +16,7 @@ import atexit
 MONTHS_FWD = 12
 MONTHS_BACK = 2
 TODAY = arrow.now()
-START_DATE = TODAY.shift(months=+MONTHS_BACK)
+START_DATE = TODAY.shift(months=-MONTHS_BACK)
 END_DATE = TODAY.shift(months=+MONTHS_FWD)
 
 NM_SPS = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
@@ -69,10 +69,10 @@ def post_event(service, event, action="upload"):
 			service.events().delete(calendarId='primary', eventId=event["id"]).execute()
 		else:
 			mlog.error("Wrong parameter value [upload|update|delete]: %s" % action)
-	except NewConnectionError as err:
+	except Exception as err:
 		mlog.error(err)
 		# Error code 409 implies existing event online
-		if err.resp.status == 409:
+		if err == NewConnectionError and err.resp.status == 409:
 			mlog.info("Attempting to repost by update")
 			post_event(service, event, "update")
 
@@ -207,9 +207,8 @@ def get_events_xml():
 	mlog.debug(response.text)
 
 	root = ET.fromstring(response.text)
-	# root = tree.getroot()
 	table = root.find("./ss:Worksheet[@ss:Name=\"Konkurranser\"]/ss:Table", NM_SPS)
-	# First row contains info on structure
+	# Skip first row, which contains info on structure
 	xml_evs = table.findall("ss:Row", NM_SPS)[1:]
 
 	return xml_evs
