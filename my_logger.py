@@ -80,7 +80,7 @@ class MyLogger:
 
 
 # test use case:
-
+#
 # logObj = MyLogger("test", logger_level="WARNING")
 # mlog = logObj.retrieve_logger()
 # mlog.debug("hei")

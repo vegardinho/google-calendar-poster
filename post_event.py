@@ -1,6 +1,10 @@
+#!/usr/bin/env python3
+
 from __future__ import print_function
 import xml.etree.ElementTree as ET
 import pickle
+import logging
+import traceback
 import os.path
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -12,6 +16,8 @@ from urllib3.exceptions import NewConnectionError
 from my_logger import MyLogger
 import arrow
 import atexit
+
+SUCCESS_FILE = "./success.out"
 
 MONTHS_FWD = 12
 MONTHS_BACK = 2
@@ -40,6 +46,7 @@ log_obj.add_handler(level="INFO", filename="info.log")
 log_obj.add_handler(level="DEBUG", filename="all.log")
 mlog = log_obj.retrieve_logger()
 
+
 def main():
 	mlog.info("LOG START")
 	atexit.register(log_end)
@@ -52,9 +59,21 @@ def main():
 	new_events = get_events()
 	uploaded_events = get_uploaded_events(service)
 	parse_events(service, new_events, uploaded_events)
+	mark_successfull();	
+
+
+# Checks if long time since last successful run; if so, send email.
+# Finally, write to file that this run successfull.
+def mark_successfull():
+	#TODO: Move sending to parallell script to be run if .plist fails.
+	# What about non-critical errors that do not abort run? Send monthly email with those errors?
+	mlog.info("Marking run as successfull")
+	with open(SUCCESS_FILE, "w") as f:
+		f.write("1")
+
 
 def log_end():
-	mlog.info("LOG END\n\n")
+	mlog.info("LOG END\n")
 
 def post_event(service, event, action="upload"):
 	mlog.info("Posting event \"{}\" ({}) with action: {}".format(event["summary"], event["start"], action))
@@ -70,11 +89,13 @@ def post_event(service, event, action="upload"):
 		else:
 			mlog.error("Wrong parameter value [upload|update|delete]: %s" % action)
 	except Exception as err:
-		mlog.error(err)
 		# Error code 409 implies existing event online
-		if err == NewConnectionError and err.resp.status == 409:
+		if type(err) == HttpError and err.resp.status == 409:
+			mlog.warning(err)
 			mlog.info("Attempting to repost by update")
 			post_event(service, event, "update")
+		else:
+			mlog.error(err)
 
 # Loop through all previously uploaded events for every new event, to see if it already exists; 
 # if so, update if changed. Delete all remaining events previously uploaded and not matched; 
@@ -312,4 +333,8 @@ def get_uploaded_events(service):
 	mlog.debug(events)
 	return events
 
-main()
+if __name__ == '__main__':
+	try:
+		main()
+	except Exception as e:
+	    mlog.error(traceback.format_exc())
