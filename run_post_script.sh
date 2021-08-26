@@ -1,8 +1,7 @@
 #! /bin/bash
 
-# Run script and enter virtual environment
-cd /Users/vegardlandsverk/Documents/Progging/google_calendar
-source bin/activate
+# Run script 
+cd /home/pi/Documents/google-calendar-poster/
 python3 post_event.py
 ret_val=$?
 
@@ -12,7 +11,7 @@ if [ $ret_val -eq 0 ]
 then
 	exit_val=0
 else
-	/usr/local/bin/wget -q --spider http://google.com
+	wget -q --spider http://google.com
 	if [[ $? -eq 0 ]]
 	then
 		python3 check_last_run.py

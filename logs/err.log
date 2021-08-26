@@ -1,0 +1,4 @@
+2021-08-26 22:31:59 post_event.py [[1;31mCRITICAL[0m] main:57 Could not initialize connection. Aborting:
+[Errno 2] No such file or directory: 'credentials.json'
+2021-08-26 22:32:41 post_event.py [[1;31mCRITICAL[0m] main:57 Could not initialize connection. Aborting:
+[Errno 2] No such file or directory: 'credentials.json'
