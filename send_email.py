@@ -3,10 +3,10 @@ import smtplib, ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-def send_email(sender_email, receiver_email, keychain_name, subject, text):
+def send_email(sender_email, receiver_email, keychain_name, keychain_user, subject, text):
 	port = 465  # For SSL
 	smtp_server = "smtp.gmail.com"
-	password = keyring.get_password(keychain_name, sender_email)
+	password = keyring.get_password(keychain_name, keychain_user)
 	message = MIMEMultipart("alternative")
 	message["Subject"] = subject
 	message["From"] = sender_email

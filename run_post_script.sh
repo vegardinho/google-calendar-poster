@@ -19,8 +19,8 @@ else
 	exit_val=-1
 fi
 
-# Move all old logs into archive folder
-mv ./logs/*.log.* ./logs/archive/
+# Move all old logs into archive folder, send fail messages down the rabbit hole
+mv ./logs/*.log.* ./logs/archive/ 2>/dev/null
 
-deactivate
+exit -1
 exit $exit_val
