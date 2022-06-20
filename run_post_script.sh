@@ -5,22 +5,22 @@ cd /home/pi/Documents/google-calendar-poster/
 python3 post_event.py
 ret_val=$?
 
-
-# Run check of last successfull run if failed run and internet connection
-if [ $ret_val -eq 0 ]
+#Only run check if internet (script sends email)
+wget -q --spider http://google.com
+if [[ $? -eq 0 ]]
 then
-	exit_val=0
-else
-	wget -q --spider http://google.com
-	if [[ $? -eq 0 ]]
-	then
-		python3 check_last_run.py
-	fi
-	exit_val=-1
+    python3 check_last_run.py
+    check_val=$?
 fi
 
 # Move all old logs into archive folder, send fail messages down the rabbit hole
 mv ./logs/*.log.* ./logs/archive/ 2>/dev/null
 
-exit -1
+#Exit with 'worst' exit code
+exit_val=$ret_val
+if [[ $check_val -ne 0 ]]
+then
+    exit_val=$check_val
+fi
+
 exit $exit_val

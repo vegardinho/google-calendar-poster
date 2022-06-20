@@ -61,7 +61,6 @@ def main():
     parse_events(service, new_events, uploaded_events)
     mark_successfull()
 
-
 # Checks if long time since last successful run; if so, send email.
 # Finally, write to file that this run successfull.
 def mark_successfull():
@@ -146,6 +145,7 @@ def setup():
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
+
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
