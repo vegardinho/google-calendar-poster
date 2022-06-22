@@ -1,10 +1,4 @@
-mail
-__pycache__
-Pipfile*
 credentials.json
-email.out
-success.out
+*.out
 token.pickle
 logs
-logs/*
-*.log
