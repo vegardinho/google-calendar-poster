@@ -1,7 +1,6 @@
 #! /bin/bash
 
 # Run script 
-cd /home/pi/Documents/google-calendar-poster/
 python3 post_event.py
 ret_val=$?
 
