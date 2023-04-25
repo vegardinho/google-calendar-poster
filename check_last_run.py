@@ -25,16 +25,16 @@ def check_if_run():
     try:
         file_tmstmp = os.path.getmtime(pe.SUCCESS_FILE)
     except Exception as e:
-        pe.log.info("Could not find success-file. Setting timestamp to zero.")
+        pe.log.warning("Could not find success-file. Setting timestamp to zero.")
 
     try:
         email_tmstmp = os.path.getmtime(EMAIL_FILE)
     except Exception as e:
-        pe.log.info("Could not find email-file. Setting timestamp to zero.")
+        pe.log.warning("Could not find email-file. Setting timestamp to zero.")
 
     try:
         if ((NOW - file_tmstmp) > FILE_SEC and (NOW - email_tmstmp > EMAIL_SEC)):
-            pe.log.info("More than a week since last successfull run. Sending email!")
+            pe.log.warning("More than a week since last successfull run. Sending email!")
 
             text = """Det er {:.1f} dag(er) siden en vellykket kjøring av Google
                         Calendar-skriptet til skienok.no. Sjekk den derre loggen!""".format(
@@ -43,7 +43,7 @@ def check_if_run():
 
             send_email.send_email("landsverk.vegard@gmail.com", "webansvarlig@skienok.no",
                                   "system", "Gmail, privat", sub, text)
-            pe.log.info("Marking email sent")
+            pe.log.warning("Marking email as sent")
             with open(EMAIL_FILE, "w") as f:
                 f.write("1")
         else:
