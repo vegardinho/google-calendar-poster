@@ -250,7 +250,7 @@ def skip_event(xml, ics):
     # if (info and ("avlys" in info.lower()) or "avlys" in xml[NAME_IN].lower()):
     # return True
     if maps == None and 0 < dist_from_now.days < 10 and not info:
-        log.info("Skipping assumed cancelled event: \"{}\"".format(xml[NAME_IN]))
+        log.warning("Skipping assumed cancelled event: \"{}\"".format(xml[NAME_IN]))
         return True
     return False
 
