@@ -4,14 +4,15 @@ import os.path
 import post_event as pe
 import traceback
 from remove_old_files import remove_old_files
+from datetime import timedelta
 
-FILE_SEC = 43200
-EMAIL_SEC = 86400
+FILE_SEC = timedelta(days = .5).total_seconds()
+EMAIL_SEC = timedelta(days = 1).total_seconds()
 EMAIL_FILE = "./email.out"
-SEC_PER_DAY = 86400
+SEC_PER_DAY = timedelta(days = 1).total_seconds()
 
 NOW = pe.TODAY.timestamp
-LOGS_EXP_SEC = 2592000
+LOGS_EXP_SEC = timedelta(days = 30).total_seconds()
 
 
 def main():
