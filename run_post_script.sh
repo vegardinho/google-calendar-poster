@@ -1,6 +1,7 @@
 #! /bin/bash
 
 # Run script 
+source .venv/bin/activate
 python3 post_event.py
 ret_val=$?
 
@@ -12,8 +13,9 @@ then
     check_val=$?
 fi
 
+#Script deactivated because limit already set in script by timedrotatinghandler
 # Move all old logs into archive folder, send fail messages down the rabbit hole
-mv ./logs/*.log.* ./logs/archive/ 2>/dev/null
+#mv ./logs/*.log.* ./logs/archive/ 2>/dev/null
 
 #Exit with 'worst' exit code
 exit_val=$ret_val
