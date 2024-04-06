@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# Run script 
+# Run script. Can't use pipenv on Debian 12
 source .venv/bin/activate
 python3 post_event.py
 ret_val=$?
