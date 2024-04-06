@@ -4,3 +4,4 @@ token.pickle
 logs
 __pycache*
 .venv
+.idea

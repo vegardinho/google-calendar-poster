@@ -1,4 +1,3 @@
-
 from __future__ import print_function
 import xml.etree.ElementTree as ET
 import pickle
@@ -28,13 +27,13 @@ TIMEZONE = 'Europe/Oslo'
 T_FORMAT = "YYYY-MM-DDTHH:mm:ssZZ"
 D_FORMAT = "YYYY-MM-DD"
 
-START_IN = 0
-END_IN = 1
-NAME_IN = 2
-CLUB_IN = 3
-DISTRICT_IN = 4
-DISTANCE_IN = 7
-INFO_IN = 11
+START_IDX = 0
+END_IDX = 1
+NAME_IDX = 2
+CLUB_IDX = 3
+DISTRICT_IDX = 4
+DISTANCE_IDX = 7
+INFO_IDX = 11
 
 
 def setup_logger():
@@ -187,15 +186,15 @@ def get_events():
         xml_info = xml_ev_info(xml_ev)
 
         if skip_event(xml_info, ics_ev):
-            log.debug("Skipping event: \"{}\"".format(xml_info[NAME_IN]))
+            log.debug("Skipping event: \"{}\"".format(xml_info[NAME_IDX]))
             continue
 
         name_list = ics_ev.name.split(", ")
         summary = '{} ({})'.format("".join(name_list[:-1]), name_list[-1])
         e_id = ics_ev.uid.split("@")[0].lower().replace('_', '')
-        time = get_time_format(xml_info[START_IN], xml_info[END_IN])
+        time = get_time_format(xml_info[START_IDX], xml_info[END_IDX])
 
-        e_pkt = make_packet(summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IN])
+        e_pkt = make_packet(summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IDX])
         events.append(e_pkt)
 
     log.debug(events)
@@ -241,15 +240,15 @@ def get_events_xml():
 
 # Skip events that are cancelled
 def skip_event(xml, ics):
-    info = xml[INFO_IN]
-    start = xml[START_IN]
+    info = xml[INFO_IDX]
+    start = xml[START_IDX]
     maps = ics.geo
-    dist_from_now = xml[START_IN] - arrow.now()
+    dist_from_now = xml[START_IDX] - arrow.now()
 
-    # if (info and ("avlys" in info.lower()) or "avlys" in xml[NAME_IN].lower()):
+    # if (info and ("avlys" in info.lower()) or "avlys" in xml[NAME_IDX].lower()):
     # return True
     if maps == None and 0 < dist_from_now.days < 10 and not info:
-        log.warning("Skipping assumed cancelled event: \"{}\"".format(xml[NAME_IN]))
+        log.warning("Skipping assumed cancelled event: \"{}\"".format(xml[NAME_IDX]))
         return True
     return False
 
@@ -286,15 +285,15 @@ def xml_ev_info(xml_ev):
     for node in tree:
         info.append(node.findtext("./ss:Data", namespaces=NM_SPS))
 
-    info[START_IN] = arrow.get(info[START_IN], tzinfo=TIMEZONE)
-    if info[END_IN] == None:
-        if info[START_IN].timetuple().tm_hour == 0:
+    info[START_IDX] = arrow.get(info[START_IDX], tzinfo=TIMEZONE)
+    if info[END_IDX] == None:
+        if info[START_IDX].timetuple().tm_hour == 0:
             days_hrs = [1, 0]
         else:
             days_hrs = [0, 4]
-        info[END_IN] = info[START_IN].shift(days=days_hrs[0], hours=days_hrs[1])
+        info[END_IDX] = info[START_IDX].shift(days=days_hrs[0], hours=days_hrs[1])
     else:
-        info[END_IN] = arrow.get(info[END_IN], tzinfo=TIMEZONE)
+        info[END_IDX] = arrow.get(info[END_IDX], tzinfo=TIMEZONE)
     return info
 
 
