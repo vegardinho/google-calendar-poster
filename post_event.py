@@ -36,6 +36,9 @@ DISTANCE_IDX = 7
 INFO_IDX = 11
 
 
+#TODO: set max_log_files=5 on all.log
+
+
 def setup_logger():
     log_obj = MyLogger()
     log_obj.add_handler(level="INFO")
@@ -121,7 +124,7 @@ def parse_events(service, new_events, uploaded_events):
                             post_event(service, new_event, "update")
                             break
                     except KeyError as e:
-                        log.warning("Tag does not exist: %s" % e)
+                        log.info("Tag does not exist: %s" % e)
 
                 ignore_events.append(uploaded_event)
                 ignore_events.append(new_event)
@@ -172,6 +175,9 @@ def setup():
 def get_events():
     ics_evs = get_events_ics()
     xml_evs = get_events_xml()
+    print(ics_evs)
+    print(xml_evs)
+    exit()
 
     if (len(xml_evs) != len(ics_evs)):
         log.critical("XML and ICS do not coincide. Aborting.")
