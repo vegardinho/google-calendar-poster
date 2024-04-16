@@ -35,6 +35,14 @@ DISTRICT_IDX = 4
 DISTANCE_IDX = 7
 INFO_IDX = 11
 
+EVENTOR_URL = 'https://eventor.orientering.no/Events/'
+EVENTOR_QUERY = f'?startDate={START_DATE.format(D_FORMAT)}&endDate={END_DATE.format(D_FORMAT)}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'
+EVENTOR_ICS = f'{EVENTOR_URL}ExportICalendarEvents{EVENTOR_QUERY}'
+EVENTOR_XML = f'{EVENTOR_URL}ExportToExcel{EVENTOR_QUERY}'
+
+print(EVENTOR_ICS)
+print(EVENTOR_XML)
+
 
 #TODO: set max_log_files=5 on all.log
 
@@ -213,9 +221,7 @@ def get_events():
 def get_events_ics():
     log.info("Downloading ICS-events")
 
-    url = 'https://eventor.orientering.no/Events/ExportICalendarEvents?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal' \
-        .format(START_DATE.format(D_FORMAT), END_DATE.format(D_FORMAT))
-    response = requests.get(url)
+    response = requests.get(EVENTOR_ICS)
     response.encoding = 'utf-8'
     c = Calendar(response.text)
     log.debug(response.text)
@@ -228,11 +234,7 @@ def get_events_ics():
 def get_events_xml():
     log.info("Downloading XML-events")
 
-    # nasjonale løp østfold++
-    # organisations=4%2C3%2C12%2C20&classifications=International%2CChampionship%2CNational
-    url = 'https://eventor.orientering.no/Events/ExportToExcel?startDate={}&endDate={}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal' \
-        .format(START_DATE.format(D_FORMAT), END_DATE.format(D_FORMAT))
-    response = requests.get(url)
+    response = requests.get(EVENTOR_XML)
     response.encoding = 'utf-8'
     log.debug(response.text)
 
