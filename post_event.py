@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import xml.etree.ElementTree as ET
 import pickle
 import traceback
@@ -71,12 +69,12 @@ def main():
     new_events = get_events()
     uploaded_events = get_uploaded_events(service)
     parse_events(service, new_events, uploaded_events)
-    mark_successfull()
+    mark_successful()
 
 
 # Checks if long time since last successful run; if so, send email.
 # Finally, write to file that this run successfull.
-def mark_successfull():
+def mark_successful():
     # TODO: Move sending to parallell script to be run if .plist fails.
     # What about non-critical errors that do not abort run? Send monthly email with those errors?
     log.info("Marking run as successfull")
@@ -89,7 +87,7 @@ def log_end():
 
 
 def post_event(service, event, action="upload"):
-    start_date = re.search(r'\d{4}.\d{2}.\d{2}', str(event['start'])).group()
+    start_date = re.search(r'\d{4}.\d{2}.\d{2}', str(event['start'])).group()  # Can be either 'date' or 'dateTime'
     log.info(f"{action.capitalize()}: \"{event['summary']}\", {start_date}")
 
     try:
@@ -122,12 +120,12 @@ def parse_events(service, new_events, uploaded_events):
         for uploaded_event in uploaded_events:
             if new_event["id"] == uploaded_event["id"]:
                 log.debug("Event \"{}\" ({}) found in previously uploaded events".format(new_event["summary"],
-                                                                                          new_event["start"]))
+                                                                                         new_event["start"]))
                 for e in new_event:
                     try:
                         if new_event[e] != uploaded_event[e] or uploaded_event["status"] == "cancelled":
                             log.debug("Event \"{}\" {} has changed!".format(new_event["summary"],
-                                                                             new_event["start"]))
+                                                                            new_event["start"]))
                             log.debug("New: \"{}\"".format(new_event[e]))
                             log.debug("Prev. uploaded: \"{}\"".format(uploaded_event[e]))
                             post_event(service, new_event, "update")
