@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 import xml.etree.ElementTree as ET
 import pickle
 import traceback
@@ -12,6 +13,7 @@ from googleapiclient.errors import HttpError
 from my_logger import MyLogger
 import arrow
 import atexit
+import re
 
 SUCCESS_FILE = "./success.out"
 
@@ -36,12 +38,13 @@ DISTANCE_IDX = 7
 INFO_IDX = 11
 
 EVENTOR_URL = 'https://eventor.orientering.no/Events/'
-EVENTOR_QUERY = f'?startDate={START_DATE.format(D_FORMAT)}&endDate={END_DATE.format(D_FORMAT)}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'
-EVENTOR_ICS = f'{EVENTOR_URL}ExportICalendarEvents{EVENTOR_QUERY}'
-EVENTOR_XML = f'{EVENTOR_URL}ExportToExcel{EVENTOR_QUERY}'
+EVENTOR_QUERY = f'startDate={START_DATE.format(D_FORMAT)}&endDate={END_DATE.format(D_FORMAT)}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'
 
-print(EVENTOR_ICS)
-print(EVENTOR_XML)
+EVENTOR_ICS = EVENTOR_URL + 'ExportICalendarEvents'
+EVENTOR_XML = EVENTOR_URL + 'ExportToExcel'
+
+CALENDAR_ID = 'primary'
+# CALENDAR_ID = '68ca41b7ea965f90ff1baa2a5999a9d69b279553818c5ba2ef60479b6fe02b11@group.calendar.google.com' # Test cal
 
 
 def setup_logger():
@@ -86,16 +89,17 @@ def log_end():
 
 
 def post_event(service, event, action="upload"):
-    log.info("Posting event \"{}\" ({}) with action: {}".format(event["summary"], event["start"], action))
+    start_date = re.search(r'\d{4}.\d{2}.\d{2}', str(event['start'])).group()
+    log.info(f"{action.capitalize()}: \"{event['summary']}\", {start_date}")
 
     try:
         if action == "upload":
-            event = service.events().insert(calendarId='primary', body=event).execute()
+            event = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
         elif action == "update":
-            event = service.events().update(calendarId='primary', eventId=event["id"],
+            event = service.events().update(calendarId=CALENDAR_ID, eventId=event["id"],
                                             body=event).execute()
         elif action == "delete":
-            service.events().delete(calendarId='primary', eventId=event["id"]).execute()
+            service.events().delete(calendarId=CALENDAR_ID, eventId=event["id"]).execute()
         else:
             log.error("Wrong parameter value [upload|update|delete]: %s" % action)
     except Exception as err:
@@ -129,18 +133,16 @@ def parse_events(service, new_events, uploaded_events):
                             post_event(service, new_event, "update")
                             break
                     except KeyError as e:
-                        log.warning("Tag does not exist: %s" % e)
+                        log.warning(f"Tag does not exist: {e} ({new_event['summary']}")
 
                 ignore_events.append(uploaded_event)
                 ignore_events.append(new_event)
                 break
 
     log.debug("Ignoring following events: {}".format(ignore_events))
-    log.info("Deleting remaining previously uploaded events")
     for rem_ev in uploaded_events:
         if rem_ev not in ignore_events and rem_ev["status"] != "cancelled":
             post_event(service, rem_ev, "delete")
-    log.info("Uploading remaining new events")
     for rem_ev in new_events:
         if rem_ev not in ignore_events:
             post_event(service, rem_ev, "upload")
@@ -181,7 +183,7 @@ def get_events():
     ics_evs = get_events_ics()
     xml_evs = get_events_xml()
 
-    if (len(xml_evs) != len(ics_evs)):
+    if len(xml_evs) != len(ics_evs):
         log.critical("XML and ICS do not coincide. Aborting.")
         exit()
 
@@ -215,23 +217,32 @@ def get_events():
 def get_events_ics():
     log.info("Downloading ICS-events")
 
-    response = requests.get(EVENTOR_ICS)
-    response.encoding = 'utf-8'
+    response = get_requests_response(EVENTOR_ICS)
     c = Calendar(response.text)
-    log.debug(response.text)
-
     ics_evs = list(c.timeline)
     return ics_evs
+
+
+def get_requests_response(URL):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
+    }
+
+    sesh = requests.Session()
+    response = sesh.get(URL, headers=headers, cookies={'EventsFilterInitState': EVENTOR_QUERY})
+    response.encoding = 'utf-8'
+
+    log.debug(response.text)
+    return response
 
 
 # Returns ElementTree object of all event-rows in xml document
 def get_events_xml():
     log.info("Downloading XML-events")
 
-    response = requests.get(EVENTOR_XML)
-    response.encoding = 'utf-8'
-    log.debug(response.text)
-
+    response = get_requests_response(EVENTOR_XML)
     root = ET.fromstring(response.text)
     table = root.find("./ss:Worksheet[@ss:Name=\"Konkurranser\"]/ss:Table", NM_SPS)
     # Skip first row, which contains info on structure
@@ -257,6 +268,7 @@ def skip_event(xml, ics):
 
 # Returns upload-ready dictionary with information in appropriate format.
 def make_packet(summary, e_url, e_id, time, e_geo, e_info):
+    info = None
     try:
         info = {
             'summary': summary,
@@ -325,11 +337,12 @@ def get_uploaded_events(service):
     tmax = END_DATE.format(T_FORMAT)
     tmin = START_DATE.format(T_FORMAT)
 
+    evs = None
     events = []
     page_token = None
     while True:
         try:
-            evs = service.events().list(calendarId='primary', pageToken=page_token, timeMin=tmin,
+            evs = service.events().list(calendarId=CALENDAR_ID, pageToken=page_token, timeMin=tmin,
                                         timeMax=tmax, showDeleted=True).execute()
         except Exception as e:
             log.error(e)
