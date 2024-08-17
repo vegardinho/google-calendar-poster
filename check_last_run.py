@@ -12,7 +12,7 @@ EMAIL_SEC = timedelta(days=1).total_seconds()
 EMAIL_FILE = "./email.out"
 SEC_PER_DAY = timedelta(days=1).total_seconds()
 
-NOW = pe.TODAY.timestamp
+NOW = pe.TODAY.timestamp()
 LOGS_EXP_SEC = timedelta(days=30).total_seconds()
 
 
