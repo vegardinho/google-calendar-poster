@@ -30,12 +30,12 @@ def check_if_run():
     try:
         file_tmstmp = os.path.getmtime(pe.SUCCESS_FILE)
     except Exception as err:
-        pe.log.warning("Could not find success-file. Setting timestamp to zero.")
+        pe.log.warning("Could not find success-file. Assuming timestamp == 0.")
 
     try:
         email_tmstmp = os.path.getmtime(EMAIL_FILE)
     except Exception as err:
-        pe.log.warning("Could not find email-file. Setting timestamp to zero.")
+        pe.log.warning("Could not find email-file. Assuming timestamp == 0.")
 
     try:
         if ((NOW - file_tmstmp) > FILE_SEC and (NOW - email_tmstmp > EMAIL_SEC)):
