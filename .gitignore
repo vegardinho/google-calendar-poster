@@ -1,7 +1,7 @@
 credentials.json
 *.out
 token.pickle
-logs
+logs*
 __pycache*
 .venv
 .idea
