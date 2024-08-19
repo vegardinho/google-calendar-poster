@@ -142,8 +142,7 @@ def parse_events(service, new_events, uploaded_events):
                             new_event[e] != uploaded_event[e]
                             or uploaded_event["status"] == "cancelled"
                         ):
-                            LOG.debug(
-                                'Event "{}" {} has changed!'.format(
+                            LOG.debug( 'Event "{}" {} has changed!'.format(
                                     new_event["summary"], new_event["start"]
                                 )
                             )
