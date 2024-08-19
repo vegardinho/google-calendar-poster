@@ -9,11 +9,12 @@ from ics import Calendar
 import requests
 from googleapiclient.errors import HttpError
 from my_logger import MyLogger
+from email_errors import email_errors
 import arrow
 import atexit
 import re
 
-SUCCESS_FILE = "./success.out"
+EMAIL_ERR_FILE = "./email_err.out"
 
 MONTHS_FWD = 12
 MONTHS_BACK = 2
@@ -23,7 +24,7 @@ END_DATE = TODAY.shift(months=+MONTHS_FWD)
 
 NM_SPS = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
 
-TIMEZONE = 'Europe/Oslo'
+TIMEZONE = "Europe/Oslo"
 T_FORMAT = "YYYY-MM-DDTHH:mm:ssZZ"
 D_FORMAT = "YYYY-MM-DD"
 
@@ -35,109 +36,129 @@ DISTRICT_IDX = 4
 DISTANCE_IDX = 7
 INFO_IDX = 11
 
-EVENTOR_URL = 'https://eventor.orientering.no/Events/'
-EVENTOR_QUERY = f'startDate={START_DATE.format(D_FORMAT)}&endDate={END_DATE.format(D_FORMAT)}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal'
+EVENTOR_URL = "https://eventor.orientering.no/Events/"
+EVENTOR_QUERY = f"startDate={START_DATE.format(D_FORMAT)}&endDate={END_DATE.format(D_FORMAT)}&organisations=5%2C19&classifications=International%2CChampionship%2CNational%2CRegional%2CLocal"
 
-EVENTOR_ICS = EVENTOR_URL + 'ExportICalendarEvents'
-EVENTOR_XML = EVENTOR_URL + 'ExportToExcel'
+EVENTOR_ICS = EVENTOR_URL + "ExportICalendarEvents"
+EVENTOR_XML = EVENTOR_URL + "ExportToExcel"
 
-CALENDAR_ID = 'primary'
+CALENDAR_ID = "primary"
 # CALENDAR_ID = '68ca41b7ea965f90ff1baa2a5999a9d69b279553818c5ba2ef60479b6fe02b11@group.calendar.google.com' # Test cal
 
+CRITICAL_LOG_FILE = "logs/critical.log"
+ERR_LOG_FILE = "logs/err.log"
+INFO_LOG_FILE = "logs/info.log"
+DEBUG_LOG_FILE = "logs/all.log"
 
-def setup_logger():
+ERR_EMAIL = "landsverk.vegard@gmail.com"
+
+
+def retrieve_logger():
     log_obj = MyLogger()
     log_obj.add_handler(level="INFO")
-    log_obj.add_handler(level="WARNING", filename="logs/err.log")
-    log_obj.add_handler(level="INFO", filename="logs/info.log")
-    log_obj.add_handler(level="DEBUG", filename="logs/all.log")
+    log_obj.add_handler(level="DEBUG", filename=DEBUG_LOG_FILE)
+    log_obj.add_handler(level="INFO", filename=INFO_LOG_FILE)
+    log_obj.add_handler(level="ERROR", filename=ERR_LOG_FILE)
     return log_obj.retrieve_logger()
 
 
-log = setup_logger()
+LOG = retrieve_logger()
 
 
 def main():
-    log.info("LOG START")
+    LOG.info("LOG START")
     atexit.register(log_end)
 
     try:
         service = setup()
     except Exception as e:
-        log.critical("Could not initialize connection. Aborting:\n{}".format(e))
-        exit(3)
+        LOG.critical("Could not initialize connection. Aborting:\n{}".format(e))
+        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
+                     EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
+        exit()
     new_events = get_events()
     uploaded_events = get_uploaded_events(service)
     parse_events(service, new_events, uploaded_events)
-    mark_successful()
-
-
-# Checks if long time since last successful run; if so, send email.
-# Finally, write to file that this run successfull.
-def mark_successful():
-    # TODO: Move sending to parallell script to be run if .plist fails.
-    # What about non-critical errors that do not abort run? Send monthly email with those errors?
-    log.info("Marking run as successfull")
-    with open(SUCCESS_FILE, "w") as f:
-        f.write("1")
 
 
 def log_end():
-    log.info("LOG END\n")
+    LOG.info("LOG END\n")
 
 
 def post_event(service, event, action="upload"):
-    start_date = re.search(r'\d{4}.\d{2}.\d{2}', str(event['start'])).group()  # Can be either 'date' or 'dateTime'
-    log.info(f"{action.capitalize()}: \"{event['summary']}\", {start_date}")
+    start_date = re.search(
+        r"\d{4}.\d{2}.\d{2}", str(event["start"])
+    ).group()  # Can be either 'date' or 'dateTime'
+    LOG.info(f"{action.capitalize()}: \"{event['summary']}\", {start_date}")
 
     try:
         if action == "upload":
-            event = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+            event = (
+                service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+            )
         elif action == "update":
-            event = service.events().update(calendarId=CALENDAR_ID, eventId=event["id"],
-                                            body=event).execute()
+            event = (
+                service.events()
+                .update(calendarId=CALENDAR_ID, eventId=event["id"], body=event)
+                .execute()
+            )
         elif action == "delete":
-            service.events().delete(calendarId=CALENDAR_ID, eventId=event["id"]).execute()
+            service.events().delete(
+                calendarId=CALENDAR_ID, eventId=event["id"]
+            ).execute()
         else:
-            log.error("Wrong parameter value [upload|update|delete]: %s" % action)
+            LOG.error("Wrong parameter value [upload|update|delete]: %s" % action)
+            email_errors(e, ERR_EMAIL, os.path.abspath(__file__),
+                EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
     except Exception as err:
         # Error code 409 implies existing event online
         if type(err) == HttpError and err.resp.status == 409:
-            log.warning(err)
-            log.info("Attempting to repost by update")
+            LOG.warning(err)
+            LOG.info("Attempting to repost by update")
             post_event(service, event, "update")
         else:
-            log.error(err)
+            LOG.error(err)
+            email_errors(e, ERR_EMAIL, os.path.abspath(__file__),
+                EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
 
 
 # Loop through all previously uploaded events for every new event, to see if it already exists;
-# if so, update if changed. Delete all remaining events previously uploaded and not matched; 
+# if so, update if changed. Delete all remaining events previously uploaded and not matched;
 # upload all remaining new events not matched
 def parse_events(service, new_events, uploaded_events):
-    log.info("Parsing events")
+    LOG.info("Parsing events")
     ignore_events = []
     for new_event in new_events:
         for uploaded_event in uploaded_events:
             if new_event["id"] == uploaded_event["id"]:
-                log.debug("Event \"{}\" ({}) found in previously uploaded events".format(new_event["summary"],
-                                                                                         new_event["start"]))
+                LOG.debug(
+                    'Event "{}" ({}) found in previously uploaded events'.format(
+                        new_event["summary"], new_event["start"]
+                    )
+                )
                 for e in new_event:
                     try:
-                        if new_event[e] != uploaded_event[e] or uploaded_event["status"] == "cancelled":
-                            log.debug("Event \"{}\" {} has changed!".format(new_event["summary"],
-                                                                            new_event["start"]))
-                            log.debug("New: \"{}\"".format(new_event[e]))
-                            log.debug("Prev. uploaded: \"{}\"".format(uploaded_event[e]))
+                        if (
+                            new_event[e] != uploaded_event[e]
+                            or uploaded_event["status"] == "cancelled"
+                        ):
+                            LOG.debug(
+                                'Event "{}" {} has changed!'.format(
+                                    new_event["summary"], new_event["start"]
+                                )
+                            )
+                            LOG.debug('New: "{}"'.format(new_event[e]))
+                            LOG.debug('Prev. uploaded: "{}"'.format(uploaded_event[e]))
                             post_event(service, new_event, "update")
                             break
                     except KeyError as e:
-                        log.warning(f"Tag does not exist: {e} ({new_event['summary']}")
+                        LOG.warning(f"Tag does not exist: {e} ({new_event['summary']}")
 
                 ignore_events.append(uploaded_event)
                 ignore_events.append(new_event)
                 break
 
-    log.debug("Ignoring following events: {}".format(ignore_events))
+    LOG.debug("Ignoring following events: {}".format(ignore_events))
     for rem_ev in uploaded_events:
         if rem_ev not in ignore_events and rem_ev["status"] != "cancelled":
             post_event(service, rem_ev, "delete")
@@ -149,31 +170,30 @@ def parse_events(service, new_events, uploaded_events):
 
 # Setup communication channel with google calendar
 def setup():
-    log.info("Setting up connection")
+    LOG.info("Setting up connection")
     # If modifying these scopes, delete the file token.pickle.
-    SCOPES = ['https://www.googleapis.com/auth/calendar']
+    SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
 
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
+    if os.path.exists("token.pickle"):
+        with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
-        with open('token.pickle', 'wb') as token:
+        with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
-    return build('calendar', 'v3', credentials=creds, cache_discovery=False)
+    return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
 
 # Gets ics- and xml-information for chosen dates, extracts relevant information, and returns list of pakcets in appropriate format
@@ -182,10 +202,12 @@ def get_events():
     xml_evs = get_events_xml()
 
     if len(xml_evs) != len(ics_evs):
-        log.critical("XML and ICS do not coincide. Aborting.")
+        LOG.critical("XML and ICS do not coincide. Aborting.")
+        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
+            EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
         exit()
 
-    log.info("Making event structs")
+    LOG.info("Making event structs")
     events = []
 
     for i in range(len(xml_evs)):
@@ -194,26 +216,27 @@ def get_events():
         xml_info = xml_ev_info(xml_ev)
 
         if skip_event(xml_info, ics_ev):
-            log.debug("Skipping event: \"{}\"".format(xml_info[NAME_IDX]))
+            LOG.debug('Skipping event: "{}"'.format(xml_info[NAME_IDX]))
             continue
 
         name_list = ics_ev.name.split(", ")
-        summary = '{} ({})'.format("".join(name_list[:-1]), name_list[-1])
-        e_id = ics_ev.uid.split("@")[0].lower().replace('_', '')
+        summary = "{} ({})".format("".join(name_list[:-1]), name_list[-1])
+        e_id = ics_ev.uid.split("@")[0].lower().replace("_", "")
         time = get_time_format(xml_info[START_IDX], xml_info[END_IDX])
 
-        e_pkt = make_packet(summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IDX])
+        e_pkt = make_packet(summary, ics_ev.url, e_id, time, 
+                            ics_ev.geo, xml_info[INFO_IDX])
         events.append(e_pkt)
 
-    log.debug(events)
+    LOG.debug(events)
     return events
 
 
 # Get .ics file from site (with events within specified dates), and make dictionary with
-# formatting matched to that of google events with relevant info for each event, and return 
+# formatting matched to that of google events with relevant info for each event, and return
 # list. ID is changed to fit limitations in google calendar id pattern.
 def get_events_ics():
-    log.info("Downloading ICS-events")
+    LOG.info("Downloading ICS-events")
 
     response = get_requests_response(EVENTOR_ICS)
     c = Calendar(response.text)
@@ -223,26 +246,28 @@ def get_events_ics():
 
 def get_requests_response(URL):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
     }
 
     sesh = requests.Session()
-    response = sesh.get(URL, headers=headers, cookies={'EventsFilterInitState': EVENTOR_QUERY})
-    response.encoding = 'utf-8'
+    response = sesh.get(
+        URL, headers=headers, cookies={"EventsFilterInitState": EVENTOR_QUERY}
+    )
+    response.encoding = "utf-8"
 
-    log.debug(response.text)
+    LOG.debug(response.text)
     return response
 
 
 # Returns ElementTree object of all event-rows in xml document
 def get_events_xml():
-    log.info("Downloading XML-events")
+    LOG.info("Downloading XML-events")
 
     response = get_requests_response(EVENTOR_XML)
     root = ET.fromstring(response.text)
-    table = root.find("./ss:Worksheet[@ss:Name=\"Konkurranser\"]/ss:Table", NM_SPS)
+    table = root.find('./ss:Worksheet[@ss:Name="Konkurranser"]/ss:Table', NM_SPS)
     # Skip first row, which contains info on structure
     xml_evs = table.findall("ss:Row", NM_SPS)[1:]
 
@@ -259,7 +284,7 @@ def skip_event(xml, ics):
     # if (info and ("avlys" in info.lower()) or "avlys" in xml[NAME_IDX].lower()):
     # return True
     if maps == None and 0 < dist_from_now.days < 10 and not info:
-        log.warning("Skipping assumed cancelled event: \"{}\"".format(xml[NAME_IDX]))
+        LOG.warning('Skipping assumed cancelled event: "{}"'.format(xml[NAME_IDX]))
         return True
     return False
 
@@ -269,22 +294,21 @@ def make_packet(summary, e_url, e_id, time, e_geo, e_info):
     info = None
     try:
         info = {
-            'summary': summary,
-            "source": {
-                'title': 'Eventor-arrangement',
-                'url': e_url
-            },
-            'id': e_id,
-            'description': 'Se <a href="{0}" target="_blank">{0}</a> for mer informasjon'.format(e_url),
+            "summary": summary,
+            "source": {"title": "Eventor-arrangement", "url": e_url},
+            "id": e_id,
+            "description": 'Se <a href="{0}" target="_blank">{0}</a> for mer informasjon'.format(
+                e_url
+            ),
             "start": time[0],
-            "end": time[1]
+            "end": time[1],
         }
         if e_geo:
             info.update({"location": "{}, {}".format(e_geo[0], e_geo[1])})
         if e_info:
-            info['description'] = "{}\n\n{}".format(e_info, info['description'])
+            info["description"] = "{}\n\n{}".format(e_info, info["description"])
     except TypeError as e:
-        log.warning(e)
+        LOG.warning(e)
 
     return info
 
@@ -315,18 +339,12 @@ def get_time_format(start, end):
     s_date = start
     e_date = end
 
-    if (s_date.timetuple().tm_hour == e_date.timetuple().tm_hour == 0):
-        start = {'date': s_date.format(D_FORMAT)}
-        end = {'date': e_date.format(D_FORMAT)}
+    if s_date.timetuple().tm_hour == e_date.timetuple().tm_hour == 0:
+        start = {"date": s_date.format(D_FORMAT)}
+        end = {"date": e_date.format(D_FORMAT)}
     else:
-        start = {
-            'dateTime': s_date.format(T_FORMAT),
-            'timeZone': TIMEZONE
-        }
-        end = {
-            'dateTime': e_date.format(T_FORMAT),
-            'timeZone': TIMEZONE
-        }
+        start = {"dateTime": s_date.format(T_FORMAT), "timeZone": TIMEZONE}
+        end = {"dateTime": e_date.format(T_FORMAT), "timeZone": TIMEZONE}
     return [start, end]
 
 
@@ -340,21 +358,34 @@ def get_uploaded_events(service):
     page_token = None
     while True:
         try:
-            evs = service.events().list(calendarId=CALENDAR_ID, pageToken=page_token, timeMin=tmin,
-                                        timeMax=tmax, showDeleted=True).execute()
+            evs = (
+                service.events()
+                .list(
+                    calendarId=CALENDAR_ID,
+                    pageToken=page_token,
+                    timeMin=tmin,
+                    timeMax=tmax,
+                    showDeleted=True,
+                )
+                .execute()
+            )
         except Exception as e:
-            log.error(e)
-        page_token = evs.get('nextPageToken')
+            LOG.error(e)
+            email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
+                         EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
+        page_token = evs.get("nextPageToken")
         events.extend(evs["items"])
         if not page_token:
             break
 
-    log.debug(events)
+    LOG.debug(events)
     return events
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        log.error(traceback.format_exc())
+        LOG.error(traceback.format_exc())
+        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
+                     EMAIL_ERR_FILE, LOG, INFO_LOG_FILE)
