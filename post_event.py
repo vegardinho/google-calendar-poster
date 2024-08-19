@@ -8,8 +8,8 @@ from google.auth.transport.requests import Request
 from ics import Calendar
 import requests
 from googleapiclient.errors import HttpError
-from my_logger import MyLogger
-from email_errors import email_errors
+from my_logger import MyLogger # type: ignore
+from email_errors import email_errors # type: ignore
 import arrow
 import atexit
 import re
