@@ -10,8 +10,8 @@ from google.auth.transport.requests import Request
 from ics import Calendar
 import requests
 from googleapiclient.errors import HttpError
-from my_logger import MyLogger # type: ignore
-from email_errors import email_errors # type: ignore
+from my_logger import MyLogger  # type: ignore
+from email_errors import email_errors  # type: ignore
 import arrow
 import atexit
 import re
@@ -71,13 +71,7 @@ def main():
     log.info("LOG START")
     atexit.register(log_end)
 
-    try:
-        service = setup()
-    except Exception as e:
-        log.critical("Could not initialize connection. Aborting:\n{}".format(e))
-        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
-                     EMAIL_ERR_FILE, log, INFO_LOG_FILE)
-        exit()
+    service = setup()
     new_events = get_events()
     uploaded_events = get_uploaded_events(service)
     parse_events(service, new_events, uploaded_events)
@@ -91,7 +85,7 @@ def post_event(service, event, action="upload"):
     start_date = re.search(
         r"\d{4}.\d{2}.\d{2}", str(event["start"])
     ).group()  # Can be either 'date' or 'dateTime'
-    log.info(f"{action.capitalize()}: \"{event['summary']}\", {start_date}")
+    log.info(f'{action.capitalize()}: "{event["summary"]}", {start_date}')
 
     try:
         if action == "upload":
@@ -110,8 +104,14 @@ def post_event(service, event, action="upload"):
             ).execute()
         else:
             log.error("Wrong parameter value [upload|update|delete]: %s" % action)
-            email_errors(e, ERR_EMAIL, os.path.abspath(__file__),
-                EMAIL_ERR_FILE, log, INFO_LOG_FILE)
+            email_errors(
+                e,
+                ERR_EMAIL,
+                os.path.abspath(__file__),
+                EMAIL_ERR_FILE,
+                log,
+                INFO_LOG_FILE,
+            )
     except Exception as err:
         # Error code 409 implies existing event online
         if type(err) == HttpError and err.resp.status == 409:
@@ -120,8 +120,14 @@ def post_event(service, event, action="upload"):
             post_event(service, event, "update")
         else:
             log.error(err)
-            email_errors(e, ERR_EMAIL, os.path.abspath(__file__),
-                EMAIL_ERR_FILE, log, INFO_LOG_FILE)
+            email_errors(
+                e,
+                ERR_EMAIL,
+                os.path.abspath(__file__),
+                EMAIL_ERR_FILE,
+                log,
+                INFO_LOG_FILE,
+            )
 
 
 # Loop through all previously uploaded events for every new event, to see if it already exists;
@@ -144,7 +150,8 @@ def parse_events(service, new_events, uploaded_events):
                             new_event[e] != uploaded_event[e]
                             or uploaded_event["status"] == "cancelled"
                         ):
-                            log.debug( 'Event "{}" {} has changed!'.format(
+                            log.debug(
+                                'Event "{}" {} has changed!'.format(
                                     new_event["summary"], new_event["start"]
                                 )
                             )
@@ -205,8 +212,9 @@ def get_events():
 
     if len(xml_evs) != len(ics_evs):
         log.critical("XML and ICS do not coincide. Aborting.")
-        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
-            EMAIL_ERR_FILE, log, INFO_LOG_FILE)
+        email_errors(
+            e, ERR_EMAIL, os.path.abspath(__file__), EMAIL_ERR_FILE, log, INFO_LOG_FILE
+        )
         exit()
 
     log.info("Making event structs")
@@ -226,8 +234,9 @@ def get_events():
         e_id = ics_ev.uid.split("@")[0].lower().replace("_", "")
         time = get_time_format(xml_info[START_IDX], xml_info[END_IDX])
 
-        e_pkt = make_packet(summary, ics_ev.url, e_id, time, 
-                            ics_ev.geo, xml_info[INFO_IDX])
+        e_pkt = make_packet(
+            summary, ics_ev.url, e_id, time, ics_ev.geo, xml_info[INFO_IDX]
+        )
         events.append(e_pkt)
 
     log.debug(events)
@@ -373,8 +382,14 @@ def get_uploaded_events(service):
             )
         except Exception as e:
             log.error(e)
-            email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
-                         EMAIL_ERR_FILE, log, INFO_LOG_FILE)
+            email_errors(
+                e,
+                ERR_EMAIL,
+                os.path.abspath(__file__),
+                EMAIL_ERR_FILE,
+                log,
+                INFO_LOG_FILE,
+            )
         page_token = evs.get("nextPageToken")
         events.extend(evs["items"])
         if not page_token:
@@ -389,5 +404,15 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         log.error(traceback.format_exc())
-        email_errors(e, ERR_EMAIL, os.path.abspath(__file__), 
-                     EMAIL_ERR_FILE, log, INFO_LOG_FILE)
+        try:
+            email_errors(
+                e,
+                ERR_EMAIL,
+                os.path.abspath(__file__),
+                EMAIL_ERR_FILE,
+                log,
+                INFO_LOG_FILE,
+            )
+        except Exception as e:
+            log.error(f"Could not send error email. Exiting./n{traceback.format_exc()}")
+            exit(-1)
