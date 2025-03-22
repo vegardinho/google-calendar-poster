@@ -9,8 +9,9 @@ keyring = "*"
 google-api-python-client = "*"
 google-auth-oauthlib = "*"
 ics = "*"
+pyyaml = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.11"
+python_version = "3.12.9"
