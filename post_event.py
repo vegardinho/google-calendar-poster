@@ -103,9 +103,10 @@ def post_event(service, event, action="upload"):
                 calendarId=CALENDAR_ID, eventId=event["id"]
             ).execute()
         else:
-            log.error("Wrong parameter value [upload|update|delete]: %s" % action)
+            err_str = "Wrong parameter value [upload|update|delete]: %s" % action
+            log.error(err_str)
             email_errors(
-                e,
+                err_str,
                 ERR_EMAIL,
                 os.path.abspath(__file__),
                 EMAIL_ERR_FILE,
@@ -114,14 +115,14 @@ def post_event(service, event, action="upload"):
             )
     except Exception as err:
         # Error code 409 implies existing event online
-        if type(err) == HttpError and err.resp.status == 409:
+        if isinstance(err, HttpError) and err.resp.status == 409:
             log.warning(err)
             log.info("Attempting to repost by update")
             post_event(service, event, "update")
         else:
             log.error(err)
             email_errors(
-                e,
+                err,
                 ERR_EMAIL,
                 os.path.abspath(__file__),
                 EMAIL_ERR_FILE,
@@ -211,9 +212,15 @@ def get_events():
     xml_evs = get_events_xml()
 
     if len(xml_evs) != len(ics_evs):
-        log.critical("XML and ICS do not coincide. Aborting.")
+        err_str = "XML and ICS do not coincide. Aborting."
+        log.critical(err_str)
         email_errors(
-            e, ERR_EMAIL, os.path.abspath(__file__), EMAIL_ERR_FILE, log, INFO_LOG_FILE
+            err_str,
+            ERR_EMAIL,
+            os.path.abspath(__file__),
+            EMAIL_ERR_FILE,
+            log,
+            INFO_LOG_FILE,
         )
         exit()
 
@@ -402,6 +409,15 @@ def get_uploaded_events(service):
 if __name__ == "__main__":
     try:
         main()
+        # Reset error log
+        email_errors(
+            None,
+            ERR_EMAIL,
+            os.path.abspath(__file__),
+            EMAIL_ERR_FILE,
+            log,
+            INFO_LOG_FILE,
+        )
     except Exception as e:
         log.error(traceback.format_exc())
         try:
