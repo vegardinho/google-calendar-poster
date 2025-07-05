@@ -58,7 +58,7 @@ ERR_EMAIL = "landsverk.vegard@gmail.com"
 def retrieve_logger():
     log_obj = MyLogger()
     log_obj.add_handler(level="INFO")
-    log_obj.add_handler(level="DEBUG", filename=DEBUG_LOG_FILE)
+    log_obj.add_handler(level="DEBUG", filename=DEBUG_LOG_FILE, max_log_files=3)
     log_obj.add_handler(level="INFO", filename=INFO_LOG_FILE)
     log_obj.add_handler(level="ERROR", filename=ERR_LOG_FILE)
     return log_obj.retrieve_logger()
