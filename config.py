@@ -3,8 +3,11 @@ import os
 import arrow
 
 
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 def env_file_path() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    return os.path.join(PROJECT_DIR, ".env")
 
 
 def _env_value(name: str, default: str) -> str:
@@ -23,6 +26,8 @@ def _env_value(name: str, default: str) -> str:
 
 
 EMAIL_ERR_FILE = "./email_err.out"
+GOOGLE_CREDENTIALS_FILE = os.path.join(PROJECT_DIR, "credentials.json")
+GOOGLE_TOKEN_FILE = os.path.join(PROJECT_DIR, "token.pickle")
 EVENTOR_API_URL = "https://eventor.orientering.no/api"
 EVENTOR_EVENT_URL = "https://eventor.orientering.no/Events/Show/{}"
 EVENTOR_API_KEY_VARIABLE = "EVENTOR_API_KEY"

@@ -9,7 +9,14 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-from config import CALENDAR_ID, END_DATE, START_DATE, T_FORMAT
+from config import (
+    CALENDAR_ID,
+    END_DATE,
+    GOOGLE_CREDENTIALS_FILE,
+    GOOGLE_TOKEN_FILE,
+    START_DATE,
+    T_FORMAT,
+)
 from models import CalendarEvent
 
 
@@ -26,18 +33,18 @@ class CalendarClient:
         scopes = ["https://www.googleapis.com/auth/calendar"]
         creds = None
 
-        if os.path.exists("token.pickle") and os.path.getsize("token.pickle") > 0:
-            with open("token.pickle", "rb") as token:
+        if os.path.exists(GOOGLE_TOKEN_FILE) and os.path.getsize(GOOGLE_TOKEN_FILE) > 0:
+            with open(GOOGLE_TOKEN_FILE, "rb") as token:
                 creds = pickle.load(token)
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    "credentials.json", scopes
+                    GOOGLE_CREDENTIALS_FILE, scopes
                 )
                 creds = flow.run_local_server(port=0)
-            with open("token.pickle", "wb") as token:
+            with open(GOOGLE_TOKEN_FILE, "wb") as token:
                 pickle.dump(creds, token)
 
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
