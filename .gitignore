@@ -6,3 +6,6 @@ __pycache*
 .venv
 .idea
 Pipfile.lock
+.env
+.email_pwd
+.vscode/

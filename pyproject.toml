@@ -1,0 +1,23 @@
+[project]
+name = "google-calendar-poster"
+version = "0.1.0"
+description = "Post Eventor orienteering events to Google Calendar."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "arrow",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "ics",
+    "keyring",
+    "pyyaml",
+    "requests",
+    "python-tools",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.uv.sources]
+python-tools = { path = "../python-tools" }
