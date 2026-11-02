@@ -15,7 +15,9 @@ the neighboring `../python-tools` repository. It does not need to be
 published online.
 
 Provide the required Google API credentials as `credentials.json` in the
-project directory. The first run creates `token.pickle` after authorization.
+project directory. Set `CALENDAR_ID` in `.env` to select the target calendar;
+it defaults to `primary` when absent. The first run creates `token.pickle`
+after authorization.
 `uv sync` installs the shared `python-tools` modules into this project's
 environment before running the application.
 

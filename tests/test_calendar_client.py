@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from calendar_client import CalendarClient
+from config import CALENDAR_ID
 
 
 class FakeLogger:
@@ -63,8 +64,7 @@ def test_post_event_inserts_using_calendar_service():
             "insert",
             {
                 "calendarId": (
-                    "68ca41b7ea965f90ff1baa2a5999a9d69b279553818c5ba2ef60479b6fe02b11"
-                    "@group.calendar.google.com"
+                    CALENDAR_ID
                 ),
                 "body": event,
             },
