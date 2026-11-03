@@ -1,11 +1,11 @@
-credentials.json
+config/.env
+config/credentials.json
+config/.email_pwd
 *.out
-token.pickle
-logs*
+state/
+logs/
 __pycache*
 .venv
 .idea
 Pipfile.lock
-.env
-.email_pwd
 .vscode/

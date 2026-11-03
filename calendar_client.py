@@ -47,6 +47,7 @@ class CalendarClient:
                     GOOGLE_CREDENTIALS_FILE, scopes
                 )
                 creds = flow.run_local_server(port=0)
+            os.makedirs(os.path.dirname(GOOGLE_TOKEN_FILE), exist_ok=True)
             with open(GOOGLE_TOKEN_FILE, "wb") as token:
                 pickle.dump(creds, token)
 
@@ -109,7 +110,7 @@ class CalendarClient:
         except HttpError as err:
             if err.resp.status == 409 and action == "upload":
                 self._logger.warning(err)
-                self._logger.info("Attempting to repost by update")
+                self._logger.warning("Attempting to repost by update")
                 self.post_event(event, "update")
             else:
                 raise

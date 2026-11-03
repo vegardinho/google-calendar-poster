@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from functools import partial
 from typing import Any
 
 from python_tools.email_errors import email_errors
@@ -12,6 +13,7 @@ from calendar_client import CalendarClient
 from config import (
     DEBUG_LOG_FILE,
     EMAIL_ERR_FILE,
+    EMAIL_PASSWORD_FILE,
     END_DATE,
     ERR_EMAIL,
     ERR_LOG_FILE,
@@ -127,7 +129,7 @@ if __name__ == "__main__":
     run_with_error_reporting(
         log,
         lambda: main(args.dry_run),
-        email_errors,
+        partial(email_errors, pwd_file=EMAIL_PASSWORD_FILE),
         ERR_EMAIL,
         EMAIL_ERR_FILE,
         INFO_LOG_FILE,

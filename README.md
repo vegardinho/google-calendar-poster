@@ -14,10 +14,13 @@ The shared `python-tools` library is installed as a local path dependency from
 the neighboring `../python-tools` repository. It does not need to be
 published online.
 
-Provide the required Google API credentials as `credentials.json` in the
-project directory. Set `CALENDAR_ID` in `.env` to select the target calendar;
-it defaults to `primary` when absent. The first run creates `token.pickle`
-after authorization.
+Provide the required Google API credentials as `config/credentials.json`.
+Store the email password used for error notifications in
+`config/.email_pwd`.
+Set `CALENDAR_ID` in `config/.env` to select the target calendar; it defaults
+to `primary` when absent. The first run creates `state/token.pickle` after
+authorization. Email error history and scheduler state are stored in `state/`;
+application logs are stored in `logs/`.
 `uv sync` installs the shared `python-tools` modules into this project's
 environment before running the application.
 

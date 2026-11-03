@@ -3,7 +3,11 @@ import config
 
 def test_project_paths_are_relative_to_config_module():
     assert config.GOOGLE_CREDENTIALS_FILE.endswith("/credentials.json")
+    assert config.EMAIL_PASSWORD_FILE.endswith("/config/.email_pwd")
     assert config.GOOGLE_TOKEN_FILE.endswith("/token.pickle")
+    assert config.EMAIL_ERR_FILE.endswith("/state/email_err.out")
+    assert config.SUCCESS_FILE.endswith("/state/success.out")
+    assert config.INFO_LOG_FILE.endswith("/logs/info.log")
 
 
 def test_env_value_reads_calendar_id_from_env_file(tmp_path, monkeypatch):
