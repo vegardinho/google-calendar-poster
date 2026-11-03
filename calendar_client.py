@@ -63,8 +63,11 @@ class CalendarClient:
 
     def list_events(self) -> list[dict[str, object]]:
         """Fetch all configured-calendar events across every result page."""
-        tmax = END_DATE.format(T_FORMAT)
-        tmin = START_DATE.format(T_FORMAT)
+        # Include the complete boundary dates. START_DATE and END_DATE contain
+        # the current time, which would otherwise exclude earlier events on
+        # the first day of the configured range.
+        tmin = START_DATE.floor("day").format(T_FORMAT)
+        tmax = END_DATE.shift(days=1).floor("day").format(T_FORMAT)
         events = []
         page_token = None
         while True:

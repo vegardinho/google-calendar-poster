@@ -47,6 +47,17 @@ def test_list_events_follows_calendar_pages():
     assert events.calls[1][1]["pageToken"] == "next"
 
 
+def test_list_events_includes_complete_boundary_dates():
+    events = FakeEvents([{"items": []}])
+    client = CalendarClient(FakeLogger(), SimpleNamespace(events=lambda: events))
+
+    client.list_events()
+
+    request = events.calls[0][1]
+    assert request["timeMin"].startswith("2026-09-03T00:00:00")
+    assert request["timeMax"].startswith("2027-11-04T00:00:00")
+
+
 def test_post_event_inserts_using_calendar_service():
     logger = FakeLogger()
     events = FakeEvents()
