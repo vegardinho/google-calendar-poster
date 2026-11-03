@@ -29,10 +29,13 @@ class CalendarClient:
 
     @classmethod
     def connect(cls, logger: logging.Logger) -> "CalendarClient":
+        """Authenticate with Google and return a connected Calendar client."""
         logger.info("Setting up connection")
         scopes = ["https://www.googleapis.com/auth/calendar"]
         creds = None
 
+        # Reuse the token when possible; interactive authorization is only
+        # needed for the first run or after an unusable token.
         if os.path.exists(GOOGLE_TOKEN_FILE) and os.path.getsize(GOOGLE_TOKEN_FILE) > 0:
             with open(GOOGLE_TOKEN_FILE, "rb") as token:
                 creds = pickle.load(token)
@@ -52,16 +55,19 @@ class CalendarClient:
 
     @property
     def service(self) -> Any:
+        """Return the Google API service, failing if authentication is incomplete."""
         if self._service is None:
             raise RuntimeError("Calendar client is not connected")
         return self._service
 
     def list_events(self) -> list[dict[str, object]]:
+        """Fetch all configured-calendar events across every result page."""
         tmax = END_DATE.format(T_FORMAT)
         tmin = START_DATE.format(T_FORMAT)
         events = []
         page_token = None
         while True:
+            # Google Calendar paginates results, so continue until no token is returned.
             response = self.service.events().list(
                 calendarId=CALENDAR_ID,
                 pageToken=page_token,
@@ -77,10 +83,13 @@ class CalendarClient:
     def post_event(
         self, event: CalendarEvent, action: str = "upload"
     ) -> None:
+        """Upload, update, or delete one event in Google Calendar."""
         start_date = re.search(r"\d{4}.\d{2}.\d{2}", str(event["start"])).group()
         self._logger.info(f'{action.capitalize()}: "{event["summary"]}", {start_date}')
 
         try:
+            # A conflict means an event with this ID already exists; updating it
+            # keeps synchronization idempotent.
             if action == "upload":
                 self.service.events().insert(
                     calendarId=CALENDAR_ID, body=event

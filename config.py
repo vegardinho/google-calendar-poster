@@ -7,10 +7,14 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def env_file_path() -> str:
+    """Return the path to this application's local configuration file."""
     return os.path.join(PROJECT_DIR, ".env")
 
 
 def _env_value(name: str, default: str) -> str:
+    """Read a named value from `.env`, returning `default` when absent."""
+    # Keep configuration file loading local to this project and avoid requiring
+    # a dotenv dependency for one simple setting.
     try:
         with open(env_file_path(), encoding="utf-8") as env_file:
             for line in env_file:
@@ -61,6 +65,8 @@ TODAY = arrow.now()
 START_DATE = TODAY.shift(months=-MONTHS_BACK)
 END_DATE = TODAY.shift(months=+MONTHS_FWD)
 
+# The .env value is useful for a shared calendar; "primary" keeps local setup
+# working when no project-specific calendar has been configured.
 CALENDAR_ID = _env_value("CALENDAR_ID", "primary")
 
 TIMEZONE = "Europe/Oslo"

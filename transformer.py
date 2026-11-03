@@ -20,6 +20,9 @@ from models import CalendarEvent
 
 
 def make_packet(event: Any, documents: list[tuple[str, str]]) -> CalendarEvent:
+    """Convert one Eventor event into a Google Calendar event payload."""
+    # Build the Google Calendar payload from Eventor fields while leaving
+    # optional values out when Eventor did not provide them.
     event_id = first_text(event, "EventId", "Id")
     name = first_text(event, "Name") or f"Event {event_id}"
     start, end = event_times(event)
@@ -59,10 +62,13 @@ def should_include_event(
     logger: logging.Logger,
     max_duration_days: int = MAX_EVENT_DURATION_DAYS,
 ) -> bool:
+    """Return whether an event fits the configured maximum duration."""
     event_id = first_text(event, "EventId", "Id")
     name = first_text(event, "Name") or f"Event {event_id}"
     start, end = event_times(event)
     duration = end - start
+    # Very long Eventor entries are usually camps or multi-day registrations,
+    # not individual calendar events.
     if duration > timedelta(days=max_duration_days):
         logger.info(
             'Skipping event "%s" (%s): duration %.1f days exceeds '
@@ -77,26 +83,33 @@ def should_include_event(
 
 
 def parse_event_time(value: str | None) -> Arrow | None:
+    """Parse an Eventor date or datetime using the application's timezone."""
     if not value:
         return None
     parsed = arrow.get(value)
+    # Eventor clock values without an offset are local Norwegian time; only
+    # convert values that already carry an explicit timezone.
     if re.search(r"(?:Z|[+-]\d{2}:\d{2})$", value):
         return parsed.to(TIMEZONE)
     return parsed.replace(tzinfo=TIMEZONE)
 
 
 def event_times(event: Any) -> tuple[Arrow, Arrow]:
+    """Return normalized start and finish times, including missing-end defaults."""
     event_id = first_text(event, "EventId", "Id")
     start = parse_event_time(event_date(event, "StartDate"))
     if start is None:
         raise ValueError(f"Eventor event {event_id} is missing a start time")
     end = parse_event_time(event_date(event, "FinishDate"))
+    # Eventor can omit the finish date. Use a sensible duration based on
+    # whether the event has a date-only or timed start.
     if end is None:
         end = start.shift(days=1) if start.hour == 0 else start.shift(hours=4)
     return start, end
 
 
 def event_date(event: Any, name: str) -> str:
+    """Extract a date and optional clock from XML or dictionary event data."""
     if isinstance(event, dict):
         value = event.get(name, "")
         if isinstance(value, dict):
@@ -115,8 +128,11 @@ def event_date(event: Any, name: str) -> str:
 
 
 def get_time_format(start: Arrow | None, end: Arrow | None) -> list[dict[str, str]]:
+    """Build the Google Calendar start/end fields for timed or all-day events."""
     if start is None or end is None:
         raise ValueError("Eventor event is missing a start or end time")
+    # Google Calendar uses date fields for all-day events and dateTime fields
+    # for events with a clock time.
     if start.hour == end.hour == 0:
         return [{"date": start.format(D_FORMAT)}, {"date": end.format(D_FORMAT)}]
     return [
@@ -126,6 +142,7 @@ def get_time_format(start: Arrow | None, end: Arrow | None) -> list[dict[str, st
 
 
 def first_text(element: Any, *names: str) -> str:
+    """Return the first non-empty value for the requested event fields."""
     for name in names:
         value = text(element, name)
         if value:
@@ -134,6 +151,7 @@ def first_text(element: Any, *names: str) -> str:
 
 
 def nested_name(event: Any, name: str) -> str:
+    """Extract a nested Eventor object's display name."""
     if isinstance(event, dict):
         value = event.get(name, {})
         return str(value.get("Name", "")) if isinstance(value, dict) else ""
@@ -142,6 +160,7 @@ def nested_name(event: Any, name: str) -> str:
 
 
 def entry_deadlines(event: Any) -> str:
+    """Format all entry-break validity periods found on an event."""
     return ", ".join(
         value
         for node in descendants(event, "EntryBreak")
@@ -159,6 +178,7 @@ def entry_deadlines(event: Any) -> str:
 
 
 def contact_details(event: Any) -> str:
+    """Collect available address and telephone attributes from event contacts."""
     contact = next(iter(descendants(event, "ContactData")), None)
     if contact is None:
         return ""
@@ -180,6 +200,7 @@ def contact_details(event: Any) -> str:
 
 
 def location_details(event: Any) -> str:
+    """Format Eventor coordinates and unit as a Calendar location string."""
     position = next(iter(descendants(event, "EventCenterPosition")), None)
     if position is None:
         return ""
@@ -195,6 +216,7 @@ def location_details(event: Any) -> str:
 
 
 def descendants(element: Any, *names: str) -> Iterator[ET.Element]:
+    """Yield XML descendants whose namespace-independent names match."""
     wanted = set(names)
     if isinstance(element, dict):
         return ()

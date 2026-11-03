@@ -12,11 +12,14 @@ def synchronize(
     logger: logging.Logger,
     dry_run: bool = False,
 ) -> None:
+    """Update changed events, remove stale ones, and upload new events."""
     logger.info("Parsing events")
     ignore_events = []
     for new_event in new_events:
         for uploaded_event in uploaded_events:
             if new_event["id"] == uploaded_event["id"]:
+                # Matching IDs identify the same calendar event; compare the
+                # payload fields to detect changes from Eventor.
                 logger.debug(
                     'Event "{}" ({}) found in previously uploaded events'.format(
                         new_event["summary"], new_event["start"]
@@ -42,9 +45,12 @@ def synchronize(
                 ignore_events.extend((uploaded_event, new_event))
                 break
 
+    # Anything previously uploaded but absent from Eventor is stale and should
+    # be removed, except events already marked cancelled by Calendar.
     for old_event in uploaded_events:
         if old_event not in ignore_events and old_event["status"] != "cancelled":
             _post_event(calendar, old_event, "delete", logger, dry_run)
+    # Remaining Eventor events have never been uploaded and are new.
     for new_event in new_events:
         if new_event not in ignore_events:
             _post_event(calendar, new_event, "upload", logger, dry_run)
@@ -57,7 +63,9 @@ def _post_event(
     logger: logging.Logger,
     dry_run: bool,
 ) -> None:
+    """Apply one calendar action, or describe it without mutation in dry-run mode."""
     if dry_run:
+        # Dry-run must describe every mutation without calling the Calendar API.
         logger.info(
             f'[dry-run] Would {action} event "{event["summary"]}" '
             f'({event["id"]})'

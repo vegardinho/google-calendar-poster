@@ -26,6 +26,7 @@ class EventorClient:
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
         sleep: Any = time.sleep,
     ) -> None:
+        """Create an Eventor client with injectable HTTP and timing dependencies."""
         self.api_key = api_key
         self.session: requests.Session = session or requests.Session()
         self.logger: logging.Logger = logger or logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class EventorClient:
         self.sleep = sleep
 
     def get(self, path: str, params: dict[str, str]) -> requests.Response:
+        """Request an Eventor endpoint with retries for transient failures."""
         headers = {"Accept": "application/xml, application/json", "ApiKey": self.api_key}
         last_error: requests.RequestException | None = None
         for attempt in range(self.retries + 1):
@@ -65,6 +67,8 @@ class EventorClient:
                     raise last_error
                 raise RuntimeError(f"Eventor request failed unexpectedly: {path}")
             delay = 2**attempt
+            # Back off exponentially so transient Eventor/API failures do not
+            # become a burst of immediate repeat requests.
             self.logger.warning(
                 "Retrying Eventor request %s after attempt %d/%d in %d seconds: %s",
                 path,
@@ -77,6 +81,9 @@ class EventorClient:
         raise RuntimeError(f"Eventor request failed unexpectedly: {path}")
 
     def get_documents(self, params: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
+        """Fetch optional event documents and group links by event ID."""
+        # Documents enrich calendar descriptions but are optional; an event
+        # should still be synchronized if this secondary request fails.
         try:
             response = self.get("/events/documents", params)
         except requests.RequestException as error:
@@ -103,13 +110,17 @@ class EventorClient:
     def iter_events(
         self, response: requests.Response
     ) -> Iterator[tuple[str, ET.Element | dict[str, Any]]]:
+        """Return parsed event IDs and payloads from an API response."""
         return iter_elements(response)
 
 
 def load_api_key() -> str:
+    """Load the Eventor API key from the process environment or `.env`."""
     key = os.environ.get(EVENTOR_API_KEY_VARIABLE)
     if key:
         return key
+    # Unlike CALENDAR_ID, the API key may also be supplied by the process
+    # environment for unattended deployments.
     with open(env_file_path(), encoding="utf-8") as env_file:
         for line in env_file:
             name, separator, value = line.partition("=")
@@ -125,6 +136,7 @@ def load_api_key() -> str:
 def iter_elements(
     response: requests.Response,
 ) -> Iterator[tuple[str, ET.Element | dict[str, Any]]]:
+    """Parse an EventList response from Eventor's XML or JSON formats."""
     try:
         root = ET.fromstring(response.content)
     except ET.ParseError:
@@ -143,6 +155,8 @@ def iter_elements(
             for item in items
         )
 
+    # Eventor responses are normally an EventList, but accepting a single
+    # Event makes the parser tolerant of direct/test responses as well.
     if local_name(root.tag) == "Event":
         elements = (root,)
     else:
@@ -158,6 +172,7 @@ def iter_elements(
 
 
 def first_text(element: ET.Element, *names: str) -> str:
+    """Return the first non-empty descendant text matching the given names."""
     for name in names:
         value = text(element, name)
         if value:
@@ -166,6 +181,7 @@ def first_text(element: ET.Element, *names: str) -> str:
 
 
 def text(element: ET.Element, name: str) -> str:
+    """Return stripped text from the first descendant with the given local name."""
     for node in element.iter():
         if local_name(node.tag) == name and node.text:
             return node.text.strip()
@@ -173,4 +189,5 @@ def text(element: ET.Element, name: str) -> str:
 
 
 def local_name(tag: str) -> str:
+    """Remove an XML namespace from a tag name."""
     return tag.rsplit("}", 1)[-1]

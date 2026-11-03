@@ -17,6 +17,8 @@ def run(
     ],
     dry_run: bool = False,
 ) -> None:
+    """Run the fetch, read, and synchronization stages in order."""
+    # Keep the application flow here so the CLI and tests use the same sequence.
     log.info("LOG START")
     atexit.register(_log_end, log)
     calendar = setup()
@@ -26,6 +28,7 @@ def run(
 
 
 def _log_end(log: logging.Logger) -> None:
+    """Write the end-of-run marker when the process exits."""
     log.info("LOG END\n")
 
 
@@ -38,9 +41,11 @@ def run_with_error_reporting(
     info_log_file: str,
     script_path: str,
 ) -> None:
+    """Run the application and report failures or reset error history."""
     try:
         main()
     except Exception as err:
+        # Report failures through the shared throttled email mechanism.
         log.exception("Run failed")
         email_errors(
             err,
@@ -51,6 +56,7 @@ def run_with_error_reporting(
             info_log_file,
         )
     else:
+        # A successful run clears any pending error history.
         email_errors(
             None,
             error_email,
